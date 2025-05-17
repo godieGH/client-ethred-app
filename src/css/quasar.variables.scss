@@ -12,14 +12,21 @@
 // to match your app's branding.
 // Tip: Use the "Theme Builder" on Quasar's documentation website.
 
-$primary   : #1976D2;
-$secondary : #26A69A;
-$accent    : #9C27B0;
+// ------------------------------
+// Prime Dashboard – Brand Colors
+// ------------------------------
 
-$dark      : #1D1D1D;
-$dark-page : #121212;
+// Core Brand Colors
+$primary   : #1F2937; // Deep charcoal/navy – primary elements
+$secondary : #4B5563; // Slate gray – secondary elements
+$accent    : #6366F1; // Periwinkle – highlights and interactive elements
 
-$positive  : #21BA45;
-$negative  : #C10015;
-$info      : #31CCEC;
-$warning   : #F2C037;
+// Backgrounds
+$dark      : #18171C; // Dark background for dark mode
+$dark-page : #09090B; // Light background for light mode
+
+// Semantic Colors
+$positive  : #10B981; // Success messages and indicators
+$negative  : #EF4444; // Error messages and indicators
+$info      : #3B82F6; // Informational messages and indicators
+$warning   : #F59E0B; // Warning messages and indicators
