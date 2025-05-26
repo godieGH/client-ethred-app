@@ -33,6 +33,6 @@ async function signInWithGoogle() {
 
 // placeholder for demo
 function fakeSignIn() {
-  return new Promise(resolve => setTimeout(resolve, 10000))
+  return new Promise((resolve) => setTimeout(resolve, 10000))
 }
 </script>

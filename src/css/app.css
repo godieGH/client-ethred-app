@@ -1,0 +1,17 @@
+/* Keep ability to scroll, just remove scrollbar UI */
+html,
+body,
+* {
+  overflow: auto;
+  /* allow scrolling */
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none;
+  /* Chrome, Safari, Opera */
+}

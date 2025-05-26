@@ -6,7 +6,7 @@ export default boot(({ app }) => {
     // 1. Add a data property that your components can bind to
     data() {
       return {
-        routerLinkColor: ''
+        routerLinkColor: '',
       }
     },
 
@@ -14,9 +14,7 @@ export default boot(({ app }) => {
     mounted() {
       // `this.$q.dark.isActive` is `true` if dark mode is currently active
       // (regardless of whether it's "auto", user-forced, or set via config) 0
-      this.routerLinkColor = this.$q.dark.isActive
-        ? 'text-grey-7'
-        : ''
-    }
+      this.routerLinkColor = this.$q.dark.isActive ? 'text-grey-7' : ''
+    },
   })
 })

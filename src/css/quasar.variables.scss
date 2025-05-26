@@ -17,16 +17,22 @@
 // ------------------------------
 
 // Core Brand Colors
-$primary   : #1F2937; // Deep charcoal/navy – primary elements
-$secondary : #4B5563; // Slate gray – secondary elements
-$accent    : #6366F1; // Periwinkle – highlights and interactive elements
+$primary: #1f2937; // Deep charcoal/navy – primary elements
+$secondary: #4b5563; // Slate gray – secondary elements
+$accent: #6366f1; // Periwinkle – highlights and interactive elements
 
 // Backgrounds
-$dark      : #18171C; // Dark background for dark mode
-$dark-page : #09090B; // Light background for light mode
+$dark: #18171c; // Dark background for dark mode
+$dark-page: #09090b; // Light background for light mode
 
 // Semantic Colors
-$positive  : #10B981; // Success messages and indicators
-$negative  : #EF4444; // Error messages and indicators
-$info      : #3B82F6; // Informational messages and indicators
-$warning   : #F59E0B; // Warning messages and indicators
+$positive: #10b981; // Success messages and indicators
+$negative: #ef4444; // Error messages and indicators
+$info: #3b82f6; // Informational messages and indicators
+$warning: #f59e0b; // Warning messages and indicators
+
+// Variables for easy customization
+$teal-base: #008080; // A classic teal
+$teal-light: #4dd0e1; // Lighter for hover/active
+$teal-dark: #005a5a; // Darker for visited/focus
+$text-color: #333; // General text color for contrast

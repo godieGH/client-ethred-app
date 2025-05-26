@@ -21,7 +21,7 @@ export default defineConfig((ctx) => {
     extras: [
       // 'ionicons-v4',
       // 'mdi-v7',
-       'fontawesome-v6',
+      'fontawesome-v6',
       // 'eva-icons',
       // 'themify',
       // 'line-awesome',
@@ -92,13 +92,23 @@ export default defineConfig((ctx) => {
     devServer: {
       port: 8080,
       // https: true,
-      open: true, // opens browser window automatically
+      open: false, // opens browser window automatically
+
+      proxy: {
+        '/uploads': {
+          target: 'http://localhost:3000' || process.env.VITE_API_BASE_URL,
+          changeOrigin: true,
+        },
+      },
     },
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#framework
     framework: {
       config: {
         dark: false,
+        notify: {
+          position: 'top-right',
+        },
       },
 
       iconSet: 'fontawesome-v6', // Quasar icon set
@@ -109,10 +119,10 @@ export default defineConfig((ctx) => {
       // you can manually specify Quasar components/directives to be available everywhere:
       //
       // components: [],
-      // directives: [],
+      //directives: ["TouchSwipe"],
 
       // Quasar plugins
-      plugins: ['Cookies'],
+      plugins: ['Cookies', 'Notify'],
     },
 
     // animations: 'all', // --- includes all animations
