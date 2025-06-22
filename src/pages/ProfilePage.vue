@@ -1,453 +1,440 @@
 <template>
-  <q-page class="profile-page q-pa-md">
-    <!-- PROFILE HEADER -->
-    <div v-if="loading" class="profile-skeleton">
-      <q-skeleton type="circle" class="avatar-skel" />
-      <q-skeleton type="text" width="50%" />
-      <q-skeleton type="text" width="70%" />
-      <q-skeleton type="text" width="20%" height="50px" />
-    </div>
-    <div v-else class="profile-content column items-center text-center q-mb-md">
-      <div class="avatar-wrapper">
-        <q-avatar size="120px" :class="$q.dark.isActive ? 'bg-dark' : 'bg-grey-3'">
-          <img :src="user.avatar" />
-        </q-avatar>
-        <q-icon
-          name="add"
-          v-show="tab === 'settings'"
-          class="edit-icon"
-          :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-primary'"
-          @click="focusAvatar"
-        />
-        <input
-          type="file"
-          ref="avatarInput"
-          accept="image/*"
-          @change="onAvatarSelected"
-          style="display: none"
-        />
+  <q-page class="profile-page">
+    <div @scroll="handleScroll" class="q-pa-md" style="overflow: scroll; height: 95vh">
+      <div v-if="loading" class="profile-skeleton">
+        <q-skeleton type="circle" class="avatar-skel" />
+        <q-skeleton type="text" width="50%" />
+        <q-skeleton type="text" width="70%" />
+        <q-skeleton type="text" width="20%" height="50px" />
       </div>
-      <div class="name q-mt-sm text-h6">
-        {{ user.name }}
-      </div>
-      <div class="username text-subtitle2 text-grey q-mt-xs">@{{ user.username }}</div>
-      <div class="bio text-body2 text-grey q-mt-xs">
-        {{ user.bio }}
-      </div>
-      <q-btn
-        v-if="hasExtraInfo"
-        flat
-        small
-        class="q-mt-sm"
-        :label="showMore ? 'Less' : 'More'"
-        :icon-right="showMore ? 'expand_less' : 'chevron_right'"
-        @click="showMore = !showMore"
-      />
-      <div v-if="showMore" class="extra-info q-mt-sm text-body2 text-grey">
-        <q-btn
-          v-if="user.contact.phone"
-          :href="`tel:${user.contact.phone}`"
-          label="Call"
-          icon="phone"
-          type="a"
-          style="font-size: 12px; border: 1px solid; padding: 0 20px"
-          flat
-          dense
-        />
-        <div v-if="user.contact.blog">
-          Blog: <a :href="user.contact.blog" target="_blank">{{ user.contact.blog }}</a>
-        </div>
-        <div v-if="user.contact.twitter">
-          Twitter:
-          <a :href="`https://twitter.com/${user.contact.twitter}`" target="_blank"
-            >@{{ user.contact.twitter }}</a
-          >
-        </div>
-      </div>
-    </div>
-    <!-- COUNTS (only on posts tab) -->
-    <div v-if="tab === 'posts'" class="counts-row q-my-md">
-      <div class="count-box">
-        <q-skeleton v-if="loadingCounts" type="text" width="40px" class="count-skel" />
-        <div v-else class="count-value">
-          {{ user.posts.length }}
-        </div>
-        <div class="count-label">Posts</div>
-      </div>
-      <div class="count-box">
-        <q-skeleton v-if="loadingCounts" type="text" width="40px" class="count-skel" />
-        <div v-else class="count-value">
-          {{ user.following.length }}
-        </div>
-        <div class="count-label">Following</div>
-      </div>
-      <div class="count-box">
-        <q-skeleton v-if="loadingCounts" type="text" width="40px" class="count-skel" />
-        <div v-else class="count-value">
-          {{ user.followers.length }}
-        </div>
-        <div class="count-label">Followers</div>
-      </div>
-    </div>
-
-    <!-- TABS CONTENT -->
-    <div class="tabs-container">
-      <q-tab-panels v-model="tab" animated class="panel-content">
-        <!-- POSTS -->
-        <q-tab-panel name="posts" class="panel-content">
-          <q-card v-for="post in user.posts" :key="post.id" class="q-mb-md">
-            <q-card-section>
-              <div class="text-h6">
-                {{ post.title }}
-              </div>
-              <div class="text-subtitle2 text-grey">
-                {{ post.date }}
-              </div>
-            </q-card-section>
-            <q-separator />
-            <q-card-section>{{ post.content }}</q-card-section>
-          </q-card>
-        </q-tab-panel>
-
-        <q-tab-panel name="following" class="panel-content">
-          <div v-if="loadingFollowing">
-            <div v-for="n in 7" :key="n" class="row items-center q-py-sm list-item">
-              <q-skeleton type="circle" class="avatar-skel-small" />
-              <q-skeleton type="text" width="30%" class="q-ml-sm" />
-              <q-skeleton type="rect" width="20%" height="30px" class="q-ml-auto btn-skel" />
-            </div>
-          </div>
-
-          <div v-else>
-            <q-list>
-              <q-item
-                v-for="f in user.following"
-                :key="f.id"
-                class="row items-center q-py-sm list-item"
-              >
-                <!-- avatar section -->
-                <q-item-section avatar circle>
-                  <img :src="setSrcFollowing(f)" alt="avatar" class="avatar-skel-small" />
-                </q-item-section>
-
-                <!-- name/text section -->
-                <q-item-section style="width: 30%">
-                  {{ f.name }}
-                </q-item-section>
-
-                <!-- button section -->
-                <q-item-section side class="q-ml-auto">
-                  <q-btn
-                    :label="f.isFollowing ? 'Unfollow' : 'Follow'"
-                    size="sm"
-                    unelevated
-                    color="primary"
-                    :disable="actionInProgress[f.id]"
-                    @click.stop="toggleFollow(f)"
-                  />
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </div>
-        </q-tab-panel>
-
-        <!-- FOLLOWERS -->
-        <q-tab-panel name="followers" class="panel-content">
-          <div v-if="loadingFollowers">
-            <div v-for="n in 7" :key="n" class="row items-center q-py-sm list-item">
-              <q-skeleton class="avatar-skel-small" />
-              <q-skeleton type="text" width="30%" class="q-ml-sm" />
-              <!-- button skeleton -->
-              <q-skeleton type="rect" width="20%" height="30px" class="q-ml-auto btn-skel" />
-            </div>
-          </div>
-
-          <div v-else>
-            <q-list>
-              <q-item
-                v-for="f in user.followers"
-                :key="f.id"
-                class="row items-center q-py-sm list-item"
-              >
-                <!-- avatar section -->
-                <q-item-section avatar>
-                  <img :src="setSrcFollowers(f)" alt="follower avatar" class="avatar-skel-small" />
-                </q-item-section>
-
-                <!-- name/text section -->
-                <q-item-section style="width: 30%">
-                  {{ f.name }}
-                </q-item-section>
-
-                <!-- follow-back button -->
-                <q-item-section side class="q-ml-auto">
-                  <q-btn
-                    :label="f.isFollowing ? 'Unfollow' : 'Follow Back'"
-                    size="sm"
-                    unelevated
-                    color="primary"
-                    :disable="actionInProgress[f.id]"
-                    @click.stop="toggleFollow(f)"
-                  />
-                </q-item-section>
-              </q-item>
-            </q-list>
-          </div>
-        </q-tab-panel>
-
-        <!-- SETTINGS -->
-        <q-tab-panel name="settings" class="panel-content">
-          <q-form class="col-8" @submit.prevent="updateProfile">
-            <q-input
-              v-model="edit.name"
-              label="Name"
-              outlined
-              bottom-slots
-              hide-bottom-space
-              :dense="true"
-              :color="
-                nameStatus.valid === true
-                  ? 'positive'
-                  : nameStatus.valid === false
-                    ? 'negative'
-                    : undefined
-              "
-              :error="nameStatus.valid === false"
-              :success="nameStatus.valid === true"
-              :input-props="commonInputProps"
-              class="q-mb-sm"
-            >
-              <!-- error slot -->
-              <template #error>
-                <div class="text-negative text-caption">
-                  {{ nameStatus.message }}
-                </div>
-              </template>
-
-              <!-- success/info slot -->
-              <template #after>
-                <div v-if="nameStatus.valid === true" class="text-positive text-caption">
-                  {{ nameStatus.message }}
-                </div>
-              </template>
-            </q-input>
-
-            <q-input
-              v-model="edit.username"
-              label="Username"
-              outlined
-              bottom-slots
-              hide-bottom-space
-              :rules="[validateUsernameFormat]"
-              :loading="usernameStatus.loading"
-              :error="usernameStatus.available === false"
-              :success="usernameStatus.available === true"
-              :color="
-                usernameStatus.available === true
-                  ? 'positive'
-                  : usernameStatus.available === false
-                    ? 'negative'
-                    : undefined
-              "
-              class="q-mb-sm"
-            >
-              <!-- only shows when error=true -->
-              <template #error>
-                <div class="text-negative text-caption">
-                  {{ usernameStatus.message }}
-                </div>
-              </template>
-
-              <!-- only shows when success=true -->
-              <template #after>
-                <div
-                  v-if="usernameStatus.available === true"
-                  class="text-positive text-caption row items-center"
-                >
-                  <q-icon name="check_circle" size="14px" class="q-mr-xs" />
-                  {{ usernameStatus.message }}
-                </div>
-              </template>
-            </q-input>
-
-            <q-input
-              v-model="edit.bio"
-              label="Bio"
-              type="textarea"
-              outlined
-              bottom-slots
-              hide-bottom-space
-              :dense="true"
-              :color="
-                bioStatus.valid === true
-                  ? 'positive'
-                  : bioStatus.valid === false
-                    ? 'negative'
-                    : undefined
-              "
-              :error="bioStatus.valid === false"
-              :success="bioStatus.valid === true"
-              :input-props="commonInputProps"
-              class="q-mb-sm"
-            >
-              <template #error>
-                <div class="text-negative text-caption">
-                  {{ bioStatus.message }}
-                </div>
-              </template>
-              <template #after>
-                <div v-if="bioStatus.valid === true" class="text-positive text-caption">
-                  {{ bioStatus.message }}
-                </div>
-              </template>
-            </q-input>
-
-            <q-input
-              v-model="edit.contact.blog"
-              label="Blog URL"
-              type="url"
-              outlined
-              bottom-slots
-              hide-bottom-space
-              :dense="true"
-              :color="
-                blogStatus.valid === true
-                  ? 'positive'
-                  : blogStatus.valid === false
-                    ? 'negative'
-                    : undefined
-              "
-              :error="blogStatus.valid === false"
-              :success="blogStatus.valid === true"
-              :input-props="commonInputProps"
-              class="q-mb-sm"
-            >
-              <template #error>
-                <div class="text-negative text-caption">
-                  {{ blogStatus.message }}
-                </div>
-              </template>
-              <template #after>
-                <div v-if="blogStatus.valid === true" class="text-positive text-caption">
-                  {{ blogStatus.message }}
-                </div>
-              </template>
-            </q-input>
-
-            <q-input
-              v-model="edit.contact.twitter"
-              label="Twitter Handle"
-              outlined
-              bottom-slots
-              hide-bottom-space
-              :dense="true"
-              :color="
-                twitterStatus.valid === true
-                  ? 'positive'
-                  : twitterStatus.valid === false
-                    ? 'negative'
-                    : undefined
-              "
-              :error="twitterStatus.valid === false"
-              :success="twitterStatus.valid === true"
-              :input-props="commonInputProps"
-              class="q-mb-sm"
-            >
-              <template #error>
-                <div class="text-negative text-caption">
-                  {{ twitterStatus.message }}
-                </div>
-              </template>
-              <template #after>
-                <div v-if="twitterStatus.valid === true" class="text-positive text-caption">
-                  {{ twitterStatus.message }}
-                </div>
-              </template>
-            </q-input>
-
-            <q-input
-              v-model="edit.contact.phone"
-              label="Phone Number"
-              type="tel"
-              outlined
-              bottom-slots
-              hide-bottom-space
-              :dense="true"
-              :color="
-                phoneStatus.valid === true
-                  ? 'positive'
-                  : phoneStatus.valid === false
-                    ? 'negative'
-                    : undefined
-              "
-              :error="phoneStatus.valid === false"
-              :success="phoneStatus.valid === true"
-              :input-props="commonInputProps"
-              class="q-mb-sm"
-            >
-              <template #error>
-                <div class="text-negative text-caption">
-                  {{ phoneStatus.message }}
-                </div>
-              </template>
-              <template #after>
-                <div v-if="phoneStatus.valid === true" class="text-positive text-caption">
-                  {{ phoneStatus.message }}
-                </div>
-              </template>
-            </q-input>
-            <div class="q-mt-md" style="display: flex; justify-content: flex-end">
-              <q-btn
-                type="submit"
-                label="Save"
-                flat
-                dense
-                style="border: 1px solid; opacity: 0.6"
+      <div v-else class="profile-hero">
+        <div
+          class="row q-col-gutter-md"
+          :class="$q.screen.lt.md ? 'column items-center text-center' : 'items-center text-left'"
+        >
+          <div class="q-col-12 q-col-md-4 avatar-column flex flex-center">
+            <div class="avatar-wrapper">
+              <q-avatar size="120px" :class="$q.dark.isActive ? 'bg-dark' : 'bg-grey-3'">
+                <img :src="user.avatar" />
+              </q-avatar>
+              <q-icon
+                name="add"
+                v-show="tab === 'settings'"
+                class="edit-icon"
+                :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-primary'"
+                @click="focusAvatar"
+              />
+              <input
+                type="file"
+                ref="avatarInput"
+                accept="image/*"
+                @change="onAvatarSelected"
+                style="display: none"
               />
             </div>
-          </q-form>
-        </q-tab-panel>
-      </q-tab-panels>
-    </div>
+          </div>
 
-    <!-- TABS BAR -->
-    <q-tabs
-      v-model="tab"
-      class="tabs-bar fixed-bottom"
-      align="justify"
-      dense
-      :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-primary'"
-    >
-      <q-tab name="posts" :label="$q.screen.lt.md ? '' : 'Posts'" icon="article" />
-      <q-tab name="following" :label="$q.screen.lt.md ? '' : 'Following'" icon="person_add" />
-      <q-tab name="followers" :label="$q.screen.lt.md ? '' : 'Followers'" icon="people" />
-      <q-tab name="settings" :label="$q.screen.lt.md ? '' : 'Settings'" icon="settings" />
-    </q-tabs>
+          <div class="q-col-12 q-col-md-8 info-column">
+            <div class="name text-h6 q-mb-xs">
+              {{ user.name }}
+            </div>
+            <div class="username text-subtitle2 text-grey q-mb-sm">@{{ user.username }}</div>
+            <div
+              style="max-width: 600px; white-space: pre-wrap"
+              class="text-body2 text-grey bio-text"
+              :class="{ 'bio--clamped': !showMore }"
+            >
+              {{ user.bio }}
+            </div>
+            <q-btn
+              v-if="hasExtraInfo"
+              flat
+              small
+              class="q-mt-sm"
+              :label="showMore ? 'Less' : 'More'"
+              :icon-right="showMore ? 'expand_less' : 'chevron_right'"
+              @click="showMore = !showMore"
+            />
+            <div v-if="showMore && false" class="extra-info q-mt-sm text-body2 text-grey">
+              <q-list bordered padding class="q-px-xl">
+                <q-item
+                  v-if="user.contact.phone"
+                  clickable
+                  tag="a"
+                  :href="`tel:${user.contact.phone}`"
+                >
+                  <q-item-section avatar>
+                    <q-icon name="phone" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>Phone</q-item-label>
+                    <q-item-label caption>{{ formattedPhone }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item
+                  v-if="user.contact.blog"
+                  clickable
+                  tag="a"
+                  :href="user.contact.blog"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <q-item-section avatar>
+                    <q-icon name="web" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>Blog</q-item-label>
+                    <q-item-label caption>{{ user.contact.blog }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item
+                  v-if="user.contact.twitter"
+                  clickable
+                  tag="a"
+                  :href="twitterUrl"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <q-item-section avatar>
+                    <q-icon name="fab fa-twitter" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>Twitter</q-item-label>
+                    <q-item-label caption>{{ user.contact.twitter }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+                <q-item v-if="user.email" clickable tag="a" :href="`mailto:${user.email}`">
+                  <q-item-section avatar>
+                    <q-icon name="email" />
+                  </q-item-section>
+                  <q-item-section>
+                    <q-item-label>Email</q-item-label>
+                    <q-item-label caption>{{ user.email }}</q-item-label>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="tab != 'settings'" class="counts-row q-my-md">
+        <ProfileCounts @tab="setTab" />
+      </div>
+
+      <!-- TABS CONTENT -->
+      <div class="tabs-container">
+        <q-tab-panels v-model="tab" animated class="panel-content">
+          <!-- POSTS -->
+          <q-tab-panel name="posts" class="panel-content">
+            <PostsTab ref="postsTabRef" :user-id="userStore.user.id" />
+          </q-tab-panel>
+
+          <!-- FOLLOWING -->
+          <q-tab-panel name="following" class="panel-content">
+            <FollowingTab ref="followingTabRef" />
+          </q-tab-panel>
+
+          <!-- FOLLOWERS -->
+          <q-tab-panel name="followers" class="panel-content">
+            <FollowersTab ref="followersTabRef" />
+          </q-tab-panel>
+
+          <q-tab-panel name="settings" class="panel-content">
+            <div id="edit">
+              <q-form class="col-8" @submit.prevent="updateProfile">
+                <q-input
+                  v-model="edit.name"
+                  label="Name"
+                  bottom-slots
+                  hide-bottom-space
+                  :dense="true"
+                  :color="
+                    nameStatus.valid === true
+                      ? 'positive'
+                      : nameStatus.valid === false
+                        ? 'negative'
+                        : undefined
+                  "
+                  :error="nameStatus.valid === false"
+                  :success="nameStatus.valid === true"
+                  :input-props="commonInputProps"
+                  class="q-mb-sm"
+                >
+                  <!-- error slot -->
+                  <template #error>
+                    <div class="text-negative text-caption">
+                      {{ nameStatus.message }}
+                    </div>
+                  </template>
+
+                  <!-- success/info slot -->
+                  <template #after>
+                    <div v-if="nameStatus.valid === true" class="text-positive text-caption">
+                      {{ nameStatus.message }}
+                    </div>
+                  </template>
+                </q-input>
+
+                <q-input
+                  v-model="edit.username"
+                  label="Username"
+                  bottom-slots
+                  hide-bottom-space
+                  :rules="[validateUsernameFormat]"
+                  :loading="usernameStatus.loading"
+                  :error="usernameStatus.available === false"
+                  :success="usernameStatus.available === true"
+                  :color="
+                    usernameStatus.available === true
+                      ? 'positive'
+                      : usernameStatus.available === false
+                        ? 'negative'
+                        : undefined
+                  "
+                  class="q-mb-sm"
+                >
+                  <!-- only shows when error=true -->
+                  <template #error>
+                    <div class="text-negative text-caption">
+                      {{ usernameStatus.message }}
+                    </div>
+                  </template>
+
+                  <!-- only shows when success=true -->
+                  <template #after>
+                    <div
+                      v-if="usernameStatus.available === true"
+                      class="text-positive text-caption row items-center"
+                    >
+                      <q-icon name="check_circle" size="14px" class="q-mr-xs" />
+                      {{ usernameStatus.message }}
+                    </div>
+                  </template>
+                </q-input>
+
+                <q-input
+                  v-model="edit.bio"
+                  label="Bio"
+                  style="font-size: 11px; resize: none"
+                  type="textarea"
+                  bottom-slots
+                  hide-bottom-space
+                  :dense="true"
+                  :color="
+                    bioStatus.valid === true
+                      ? 'positive'
+                      : bioStatus.valid === false
+                        ? 'negative'
+                        : undefined
+                  "
+                  :error="bioStatus.valid === false"
+                  :success="bioStatus.valid === true"
+                  :input-props="commonInputProps"
+                  class="q-mb-sm"
+                >
+                  <template #error>
+                    <div class="text-negative text-caption">
+                      {{ bioStatus.message }}
+                    </div>
+                  </template>
+                  <template #after>
+                    <div v-if="bioStatus.valid === true" class="text-positive text-caption">
+                      {{ bioStatus.message }}
+                    </div>
+                  </template>
+                </q-input>
+
+                <h6>Contact Settings</h6>
+                <q-input
+                  v-model="edit.contact.blog"
+                  label="Blog URL"
+                  type="url"
+                  bottom-slots
+                  hide-bottom-space
+                  :dense="true"
+                  :color="
+                    blogStatus.valid === true
+                      ? 'positive'
+                      : blogStatus.valid === false
+                        ? 'negative'
+                        : undefined
+                  "
+                  :error="blogStatus.valid === false"
+                  :success="blogStatus.valid === true"
+                  :input-props="commonInputProps"
+                  class="q-mb-sm"
+                >
+                  <template #error>
+                    <div class="text-negative text-caption">
+                      {{ blogStatus.message }}
+                    </div>
+                  </template>
+                  <template #after>
+                    <div v-if="blogStatus.valid === true" class="text-positive text-caption">
+                      {{ blogStatus.message }}
+                    </div>
+                  </template>
+                </q-input>
+
+                <q-input
+                  v-model="edit.contact.twitter"
+                  label="Twitter Handle"
+                  bottom-slots
+                  hide-bottom-space
+                  :dense="true"
+                  :color="
+                    twitterStatus.valid === true
+                      ? 'positive'
+                      : twitterStatus.valid === false
+                        ? 'negative'
+                        : undefined
+                  "
+                  :error="twitterStatus.valid === false"
+                  :success="twitterStatus.valid === true"
+                  :input-props="commonInputProps"
+                  class="q-mb-sm"
+                >
+                  <template #error>
+                    <div class="text-negative text-caption">
+                      {{ twitterStatus.message }}
+                    </div>
+                  </template>
+                  <template #after>
+                    <div v-if="twitterStatus.valid === true" class="text-positive text-caption">
+                      {{ twitterStatus.message }}
+                    </div>
+                  </template>
+                </q-input>
+
+                <q-input
+                  v-model="edit.contact.phone"
+                  label="Phone Number"
+                  type="tel"
+                  bottom-slots
+                  hide-bottom-space
+                  :dense="true"
+                  :color="
+                    phoneStatus.valid === true
+                      ? 'positive'
+                      : phoneStatus.valid === false
+                        ? 'negative'
+                        : undefined
+                  "
+                  :error="phoneStatus.valid === false"
+                  :success="phoneStatus.valid === true"
+                  :input-props="commonInputProps"
+                  class="q-mb-sm"
+                >
+                  <template #error>
+                    <div class="text-negative text-caption">
+                      {{ phoneStatus.message }}
+                    </div>
+                  </template>
+                  <template #after>
+                    <div v-if="phoneStatus.valid === true" class="text-positive text-caption">
+                      {{ phoneStatus.message }}
+                    </div>
+                  </template>
+                </q-input>
+                <div class="q-mt-md" style="display: flex; justify-content: flex-end">
+                  <q-btn
+                    type="submit"
+                    class="full-width"
+                    label="Save"
+                    :loading="saving"
+                    flat
+                    dense
+                    style="border: 1px solid; opacity: 0.6"
+                  />
+                </div>
+              </q-form>
+            </div>
+          </q-tab-panel>
+        </q-tab-panels>
+      </div>
+
+      <div v-if="$q.screen.lt.md" class="tabs_bottom fixed-bottom">
+        <q-tabs
+          v-model="tab"
+          class="tabs-bar"
+          align="justify"
+          dense
+          :class="$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-primary'"
+        >
+          <q-tab name="posts" :label="$q.screen.lt.md ? '' : 'Posts'" icon="article" />
+          <q-tab name="following" :label="$q.screen.lt.md ? '' : 'Following'" icon="person_add" />
+          <q-tab name="followers" :label="$q.screen.lt.md ? '' : 'Followers'" icon="people" />
+          <q-tab name="settings">
+            <i class="fas fa-user-edit" style="font-size: 1.2rem"></i>
+            <span v-if="!$q.screen.lt.md" style="padding-top: 5px">Edit Profile</span>
+          </q-tab>
+        </q-tabs>
+      </div>
+    </div>
   </q-page>
 </template>
 <script setup>
-import { ref, onMounted, watch, computed, reactive } from 'vue'
+import FollowingTab from './tabs/FollowingTab.vue'
+import FollowersTab from './tabs/FollowersTab.vue'
+import PostsTab from './tabs/PostsTab.vue'
+import ProfileCounts from './tabs/ProfileCounts.vue'
+import { getAvatarSrc } from '../composables/formater'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useQuasar } from 'quasar'
-import { useUserStore } from 'stores/user'
 import { api } from 'boot/axios'
-import { usePeopleStore } from 'stores/peopleStore'
+import { useUserStore } from 'stores/user'
+import { useRoute, useRouter } from 'vue-router'
+import { throttle } from 'quasar'
 
+const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
-const peopleStore = usePeopleStore()
 const $q = useQuasar()
 const loading = ref(true)
-const loadingCounts = ref(true)
-const loadingFollowing = ref(false)
-const loadingFollowers = ref(false)
 const tab = ref('posts')
 const showMore = ref(false)
-const actionInProgress = reactive({})
+const saving = ref(false)
+
+const followingTabRef = ref(null)
+const followersTabRef = ref(null)
+const postsTabRef = ref(null)
+
+function setTabFromRoute() {
+  const t = route.query.tab
+  if (t === 'following' || t === 'followers' || t === 'settings') {
+    tab.value = t
+  } else {
+    tab.value = 'posts'
+  }
+}
+
+function setTab(t) {
+  tab.value = t
+}
+
+setTabFromRoute()
+
+watch(
+  () => route.query.tab,
+  () => {
+    setTabFromRoute()
+  },
+)
+
+watch(tab, (newTab) => {
+  if (route.query.tab !== newTab) {
+    router.replace({
+      path: '/profile',
+      query: { tab: newTab },
+    })
+  }
+})
 
 const usernameStatus = ref({
-  // holds server/API state
   loading: false,
-  available: null, // null = unchecked, true/false = result
-  message: '', // server or validation message
+  available: null,
+  message: '',
 })
 let usernameTimeout = null
 const nameStatus = ref({ valid: null, message: '' })
@@ -473,9 +460,6 @@ const user = ref({
     blog: '',
     twitter: '',
   },
-  posts: [],
-  following: [],
-  followers: [],
 })
 const edit = ref({
   name: '',
@@ -494,75 +478,32 @@ const hasExtraInfo = computed(() => {
   return c.phone || c.blog || c.twitter
 })
 
-function fetchProfile() {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        avatar: userStore.user.avatar != null ? `/uploads/${userStore.user.avatar}` : 'default.png',
-        name: userStore.user.name,
-        username: userStore.user.username,
-        bio: userStore.user.bio,
-        contact: userStore.user.contact,
-        posts: [
-          /*{
-            id: 1,
-            title: 'Hello Vue!',
-            date: '2025-05-10',
-            content: 'My first post...',
-          },
-          {
-            id: 2,
-            title: 'Quasar Rocks',
-            date: '2025-05-12',
-            content: 'Building UI with Quasar...',
-          },
-        */
-        ],
-        following: userStore.following,
-        followers: userStore.followers,
-      })
-    }, 1200)
-  })
+async function fetchProfile() {
+  return {
+    avatar: getAvatarSrc(userStore.user.avatar),
+    name: userStore.user.name,
+    username: userStore.user.username,
+    bio: userStore.user.bio,
+    contact: userStore.user.contact,
+  }
 }
 
 async function init() {
-  await userStore.fetchUsersData()
-  await userStore.fetchFollowers()
-  await userStore.fetchFollowing()
-  const profile = await fetchProfile()
-  user.value = profile
-  edit.value = {
-    ...profile,
-    contact: {
-      ...profile.contact,
-    },
-  }
-  loading.value = false
-  setTimeout(() => {
-    loadingCounts.value = false
-  }, 500)
-}
+  loading.value = true
+  try {
+    await userStore.fetchUsersData()
 
-async function loadTabData(name) {
-  if (name === 'following') {
-    loadingFollowing.value = true
-    setTimeout(() => {
-      loadingFollowing.value = false
-    }, 800)
-  }
-  if (name === 'followers') {
-    loadingFollowers.value = true
-    setTimeout(() => {
-      loadingFollowers.value = false
-    }, 800)
+    const profile = await fetchProfile()
+    user.value = profile
+    edit.value = JSON.parse(JSON.stringify(profile))
+  } catch (err) {
+    console.error('Init failed:', err)
+    $q.notify({ type: 'negative', message: 'Couldn’t load your profile.' })
+  } finally {
+    loading.value = false
   }
 }
 
-watch(tab, (newTab) => {
-  loadTabData(newTab)
-})
-
-// --- Validators ---
 const validateName = (val) => {
   if (!val) {
     return 'Full name is required'
@@ -620,9 +561,9 @@ const validateTwitter = (val) => {
   return null
 }
 
-// --- Update Profile ---
 async function updateProfile() {
   const { name, username, bio, contact } = edit.value
+  saving.value = true
 
   // 1. Name
   let err = validateName(name)
@@ -686,6 +627,8 @@ async function updateProfile() {
       type: 'negative',
       message: 'Failed to update profile. Please try again.',
     })
+  } finally {
+    saving.value = false
   }
 }
 
@@ -766,6 +709,7 @@ async function onAvatarSelected(event) {
 
         // Success
         user.value.avatar = URL.createObjectURL(file)
+        await userStore.fetchUsersData()
         notif({
           spinner: false,
           icon: 'done',
@@ -842,7 +786,7 @@ watch(
   (val) => {
     const err = validateName(val)
     nameStatus.value.valid = !err
-    nameStatus.value.message = err || 'Ok'
+    nameStatus.value.message = err || ''
   },
 )
 
@@ -851,7 +795,7 @@ watch(
   (val) => {
     const err = validateBio(val)
     bioStatus.value.valid = !err
-    bioStatus.value.message = err || 'OK'
+    bioStatus.value.message = err || ''
   },
 )
 
@@ -860,7 +804,7 @@ watch(
   (val) => {
     const err = validateURL(val)
     blogStatus.value.valid = !err
-    blogStatus.value.message = err || 'OK'
+    blogStatus.value.message = err || ''
   },
 )
 
@@ -869,7 +813,7 @@ watch(
   (val) => {
     const err = validateTwitter(val)
     twitterStatus.value.valid = !err
-    twitterStatus.value.message = err || 'OK'
+    twitterStatus.value.message = err || ''
   },
 )
 
@@ -878,43 +822,43 @@ watch(
   (val) => {
     const err = validatePhone(val)
     phoneStatus.value.valid = !err
-    phoneStatus.value.message = err || 'OK'
+    phoneStatus.value.message = err || ''
   },
 )
 
-function setSrcFollowing(f) {
-  const avatar = f.avatar
-  let src
-  src = avatar != null ? `/uploads/${avatar}` : 'default.png'
-  return src
-}
-
-function setSrcFollowers(f) {
-  const avatar = f.avatar
-  let src
-  src = avatar != null ? `/uploads/${avatar}` : 'default.png'
-  return src
-}
-
-async function toggleFollow(u) {
-  peopleStore.fetchAll()
-  actionInProgress[u.id] = true
-  console.log(peopleStore.people)
-  try {
-    if (u.isFollowing) {
-      await peopleStore.unfollow(u.id)
-      u.isFollowing = false
-    } else {
-      await peopleStore.follow(u.id)
-      u.isFollowing = true
+function onNearBottom(e) {
+  const el = e.target
+  const dist = el.scrollHeight - (el.scrollTop + el.clientHeight)
+  if (dist <= 300) {
+    if (tab.value === 'following') {
+      followingTabRef.value?.fetchFollowing()
     }
-  } catch (e) {
-    console.error(e)
-    // optional: notify user
-  } finally {
-    actionInProgress[u.id] = false
+    if (tab.value === 'followers') {
+      followersTabRef.value?.fetchFollowers()
+    }
+
+    if (tab.value === 'posts') {
+      postsTabRef.value?.fetchPosts()
+    }
   }
 }
+const handleScroll = throttle(onNearBottom, 50)
+
+// add this:
+const formattedPhone = computed(() => {
+  const raw = user.value.contact.phone
+  if (!raw) return ''
+  // simple formatter, tweak to your needs:
+  const digits = raw.replace(/\D/g, '')
+  return digits.length === 10
+    ? `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`
+    : raw
+})
+
+const twitterUrl = computed(() => {
+  const handle = user.value.contact?.twitter?.replace(/^@/, '')
+  return handle ? `https://x.com/${handle}` : ''
+})
 
 onMounted(init)
 </script>
@@ -960,26 +904,7 @@ onMounted(init)
     transform: scale(0.92);
   }
 }
-.counts-row {
-  display: flex;
-  justify-content: space-around;
-}
-.count-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-.count-value {
-  font-size: 1.2rem;
-  font-weight: 600;
-}
-.count-label {
-  font-size: 0.8rem;
-  color: gray;
-}
-.count-skel {
-  height: 28px;
-}
+
 .tabs-container {
   padding-bottom: 56px;
 }
@@ -992,16 +917,25 @@ onMounted(init)
 .btn-skel {
   border-radius: 4px;
 }
-.tabs-bar {
-  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
-  padding-bottom: 10px;
+
+.tabs_bottom {
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
+
 .fixed-bottom {
   position: fixed;
   bottom: 0;
   left: 0;
   width: 100%;
   z-index: 10;
+}
+.tabs-bar {
+  box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+  padding-bottom: 10px;
+  max-width: 600px;
+  width: 100%;
 }
 .username {
   color: gray;
@@ -1021,5 +955,13 @@ onMounted(init)
   left: 0;
   bottom: -18px; /* pull it up tight under the border */
   margin: 0;
+}
+
+.bio--clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* limit to 2 lines */
+  overflow: hidden; /* hide the rest */
+  text-overflow: ellipsis; /* show “…” */
 }
 </style>

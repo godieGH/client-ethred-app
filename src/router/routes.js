@@ -1,4 +1,5 @@
 import { useUserStore } from 'stores/user'
+import { api } from 'boot/axios'
 
 const routes = [
   {
@@ -6,7 +7,7 @@ const routes = [
     component: () => import('layouts/AuthLayout.vue'),
     children: [
       {
-        path: '/auth/login',
+        path: 'login',
         name: 'login',
         component: () => import('pages/LoginPage.vue'),
         beforeEnter: async () => {
@@ -18,12 +19,33 @@ const routes = [
         },
       },
       {
-        path: '/auth/register',
+        path: 'register',
         component: () => import('pages/RegisterPage.vue'),
       },
       {
-        path: '/auth/forgot-password',
+        path: 'forgot-password',
         component: () => import('pages/ForgotPasswordPage.vue'),
+      },
+      {
+        path: 'reset/password/:token',
+        name: 'reset-password',
+        component: () => import('pages/ResetPasswordPage.vue'),
+        beforeEnter: async (to, from, next) => {
+          const { token } = to.params
+          try {
+            await api.get(`/users/reset/password/${token}`)
+            //console.log(from, res)
+            next()
+          } catch (err) {
+            //console.log(err.status)
+            next(`/auth/password/reset/error/${err.status}`)
+          }
+        },
+      },
+      {
+        path: 'password/reset/error/:status',
+        name: 'ErrorPassword',
+        component: () => import('pages/ErrorPasswordPage.vue'),
       },
     ],
   },
@@ -32,27 +54,42 @@ const routes = [
     component: () => import('layouts/MainLayout.vue'),
     children: [
       {
-        path: '/',
+        path: '',
         component: () => import('pages/AppPage.vue'),
       },
       {
-        path: '/profile',
+        path: 'profile',
         name: 'profile',
         component: () => import('pages/ProfilePage.vue'),
       },
       {
-        path: '/people',
+        path: 'people',
         name: 'people',
         component: () => import('pages/PeoplePage.vue'),
       },
+      {
+        path: 'create',
+        name: 'create',
+        component: () => import('components/CreatePanel.vue'),
+      },
     ],
   },
-
+  {
+    path: '/view/:id',
+    name: 'view-person',
+    component: () => import('pages/ViewProfilePage.vue'),
+  },
   // Always leave this as last one,
   // but you can also remove it
   {
     path: '/:catchAll(.*)*',
-    component: () => import('pages/ErrorNotFound.vue'),
+    redirect: () => ({ name: 'error-page', params: { status: '404' } }),
+  },
+  {
+    name: 'error-page',
+    path: '/error/:status',
+    component: () => import('pages/ErrorHandlerPage.vue'),
+    props: true,
   },
 ]
 

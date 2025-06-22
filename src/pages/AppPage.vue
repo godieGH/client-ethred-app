@@ -1,54 +1,621 @@
 <template>
-  <q-page>
-    <div class="q-px-lg">
-      <q-card v-for="n in 10" :key="n" flat bordered style="max-width: 500px; margin: 10px 0">
-        <q-item>
-          <q-item-section avatar>
-            <q-skeleton type="QAvatar" />
-          </q-item-section>
+  <q-page style="overflow-y: scroll; height: 90vh">
+    <div class="row" style="overflow-y: hidden; height: 100%">
+      <div @scroll="fetchMorePost" class="col-12 col-md-6" style="overflow-y: auto; height: 100vh; padding-bottom: 70px">
+        <div>
+          <div v-if="loading" class="q-px-lg">
+            <q-card v-for="n in 5" :key="n" flat bordered style="margin: 10px 0">
+              <q-item>
+                <q-item-section avatar>
+                  <q-skeleton size="40px" type="QAvatar" />
+                </q-item-section>
 
-          <q-item-section>
-            <q-item-label>
-              <q-skeleton type="text" />
-            </q-item-label>
-            <q-item-label caption>
-              <q-skeleton type="text" width="80%" />
-            </q-item-label>
-          </q-item-section>
-        </q-item>
+                <q-item-section>
+                  <q-item-label>
+                    <q-skeleton
+                      type="text"
+                      height="14px"
+                      width="100vw"
+                      style="margin-bottom: 4px"
+                    />
+                  </q-item-label>
+                  <q-item-label caption>
+                    <q-skeleton type="text" height="14px" width="80%" />
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
 
-        <q-item>
-          <q-item-section avatar />
+              <q-item>
+                <q-item-section avatar />
 
-          <q-item-section class="q-pl-sm">
-            <q-skeleton height="150px" class="q-mb-sm" />
+                <q-item-section class="q-pl-sm">
+                  <q-skeleton height="400px" class="q-mb-sm" />
 
-            <div class="row items-center justify-between no-wrap">
-              <div class="row items-center">
-                <q-icon name="chat_bubble_outline" color="grey-4" class="q-mr-sm" size="18px" />
-                <q-skeleton type="text" width="30px" />
-              </div>
+                  <div class="row items-center justify-between no-wrap">
+                    <div class="row items-center">
+                      <q-icon name="far fa-comment" color="grey-4" class="q-mr-sm" size="18px" />
+                      <q-skeleton type="text" width="30px" />
+                    </div>
 
-              <div class="row items-center">
-                <q-icon name="repeat" color="grey-4" class="q-mr-sm" size="18px" />
-                <q-skeleton type="text" width="30px" />
-              </div>
+                    <div class="row items-center">
+                      <q-icon name="send" color="grey-4" class="q-mr-sm" size="18px" />
+                      <q-skeleton type="text" width="30px" />
+                    </div>
 
-              <div class="row items-center">
-                <q-icon name="favorite_border" color="grey-4" class="q-mr-sm" size="18px" />
-                <q-skeleton type="text" width="30px" />
-              </div>
-            </div>
-          </q-item-section>
-        </q-item>
-      </q-card>
+                    <div class="row items-center">
+                      <q-icon name="favorite_border" color="grey-4" class="q-mr-sm" size="18px" />
+                      <q-skeleton type="text" width="30px" />
+                    </div>
+                  </div>
+
+                  <q-card-section class="q-pa-sm">
+                    <q-skeleton type="text" width="80%" />
+                    <q-skeleton type="text" width="60%" class="q-mt-xs" />
+                  </q-card-section>
+                </q-item-section>
+              </q-item>
+            </q-card>
+          </div>
+          <div v-else class="q-px-lg">
+            <q-card v-for="post in posts" :key="post.id" flat bordered style="margin: 10px 0">
+              <q-item>
+                <q-item-section avatar>
+                  <q-avatar @click="openMeta(post, 'profile-preview')">
+                    <img :src="getAvatarSrc(post.user.avatar)" />
+                  </q-avatar>
+                </q-item-section>
+
+                <q-item-section>
+                  <q-item-label style="padding: 0 0 0 8px; margin: 0">
+                    <span class="text-grey">@{{ post.user.username }}</span>
+                    <span v-if="post.user.id !== userStore.user.id"> • </span>
+                    <button
+                      v-if="post.user.id !== userStore.user.id"
+                      @click="toggleFollow(post.user.id, post.user.isFollowing)"
+                      style="border: none; background: none"
+                      class="follow-btn-fy text-green"
+                    >
+                      {{ post.user.isFollowing ? 'Following' : 'Follow' }}
+                    </button>
+                  </q-item-label>
+
+                  <span style="padding: 0 0 0 8px; font-size: 10px" class="text-grey"
+                    >{{ formatTime(post.createdAt) }}
+                    <span>
+                      <span
+                        v-if="post.audience === 'public' || post.audience === 'friends'"
+                        style="padding: 0 4px"
+                        >•</span
+                      >
+                      <i v-if="post.audience == 'public'" class="material-icons">public</i>
+                      <i v-else-if="post.audience == 'friends'" class="material-icons">people</i>
+                      <i v-else class=""></i>
+                    </span>
+                  </span>
+                </q-item-section>
+              </q-item>
+
+              <q-item>
+                <q-item-section avatar />
+
+                <q-item-section class="q-pl-sm">
+                  <div v-if="post.type === 'image' || post.type === 'video'" class="q-mb-sm">
+                    <div v-if="post.type === 'video'" class="q-video">
+                      <q-skeleton
+                        v-if="!post.videoReady"
+                        type="rect"
+                        :aspect-ratio="9 / 16"
+                        width="100%"
+                        height="400px"
+                        class="skeleton-overlay"
+                      />
+                      <CustomVideoPlayer
+                        v-show="post.videoReady"
+                        :src="`uploads/posts/${post.mediaUrl}`"
+                        @ready="post.videoReady = true"
+                      />
+                    </div>
+
+                    <img
+                      v-if="post.type === 'image'"
+                      :src="`uploads/posts/${post.mediaUrl}`"
+                      style="width: 100%; border-radius: 8px"
+                    />
+                  </div>
+
+                  <div class="row items-center justify-between no-wrap">
+                    <div class="row items-center">
+                      <div
+                        style="padding: 0; margin: 0; cursor: pointer"
+                        @click="post.comments ? openMeta(post, 'comments') : null"
+                      >
+                        <q-icon name="far fa-comment" color="grey-4" class="q-mr-sm" size="18px" />
+
+                        <span v-if="post.comments" style="font-size: 12px">{{
+                          formatPostCounts(post.commentCounts)
+                        }}</span>
+                      </div>
+                    </div>
+
+                    <div
+                      class="row items-center"
+                      style="cursor: pointer"
+                      @click="openMeta(post, 'share')"
+                    >
+                      <q-icon name="send" color="grey-4" class="q-mr-sm" size="18px" />
+                      <span style="font-size: 12px">{{ formatPostCounts(post.shareCounts) }}</span>
+                    </div>
+
+                    <div class="row items-center" style="cursor: pointer">
+                      <q-icon
+                        :name="post.likedByMe ? 'favorite' : 'favorite_border'"
+                        :color="post.likedByMe ? 'red' : 'grey-4'"
+                        class="q-mr-sm like-btn"
+                        size="20px"
+                        @click="toggleLike(post)"
+                      />
+                      <span
+                        v-if="post.likeCounts"
+                        @click="openMeta(post, 'likes')"
+                        style="font-size: 12px"
+                        >{{ formatPostCounts(post.likes) }}</span
+                      >
+                    </div>
+                  </div>
+
+                  <q-card-section class="q-pa-sm">
+                    <div
+                      class="post-body"
+                      :class="{ collapsed: !post.showMore }"
+                      style="font-size: 12px; transform: translateX(-7px); border-left: 3px solid grey; padding: 0 0 0 4px;"
+                    >
+                      {{ post.body }}
+                    </div>
+                    <div v-if="post.body.split('\n').length > 4 || post.body.length > 200">
+                      <button class="show-more-btn" @click="toggleShow(post)">
+                        {{ post.showMore ? 'less' : 'more' }}
+                      </button>
+                    </div>
+                    <div style="margin-top: 4px">
+                      <LikersStackAvatar
+                        :post_id="post.id"
+                        @click="openMeta(post, 'followed-by-me-who-liked-post')"
+                      />
+
+                      <div class="row" style="padding: 3px 0">
+                        <q-chip
+                          v-for="link in post.linkUrl"
+                          :key="link.url"
+                          tag="a"
+                          :href="link.url"
+                          clickable
+                          dense
+                          style="font-size: 10px; padding: 8px; margin: 0; overflow: hidden;"
+                          outline
+                          class="text-green"
+                          icon="link"
+                          @click="openMeta(post, 'links')"
+                        >
+                          {{ link.name }}
+                        </q-chip>
+                        <q-chip
+                          v-for="mention in post.keywords.mentions"
+                          :key="mention"
+                          clickable
+                          style="
+                            font-size: 10px;
+                            padding: 3px 4px;
+                            margin: 0;
+                            border: 1px solid #dddddd67; overflow: hidden;
+                          "
+                          @click="openMeta(post, 'mention')"
+                        >
+                          <i class="material-icons" style="padding-right: 5px; font-size: 12px"
+                            >account_circle</i
+                          >
+                          {{ mention }}
+                        </q-chip>
+                      </div>
+                      <span class="text-grey tags" style="font-size: 12px">
+                        <span v-for="tag in post.keywords.tags" :key="tag"> #{{ tag }} </span>
+                      </span>
+                    </div>
+                  </q-card-section>
+                </q-item-section>
+              </q-item>
+            </q-card>
+             
+             
+            <div v-if="loadingMorePosts" class="flex justify-center q-my-md">
+               <q-spinner-dots size="24px" />
+             </div>
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="!isMobile"
+        class="col-12 col-md-6"
+        style="height: 95vh; overflow: hidden; min-width: 0"
+      >
+        <template v-if="activePost">
+          <!-- Dynamically choose which component to render -->
+          <component :is="currentPanelComponent" :post="activePost" :key="activePost.id + activeView" />
+
+        </template>
+        <template v-else>
+          <SidePanelDefault />
+        </template>
+      </div>
+
+      <q-dialog
+        v-if="isMobile"
+        v-model="showDrawer"
+        :maximized="showMaximized"
+        position="bottom"
+        full-width
+        transition-show="slide-up"
+        :class="{ 'full-dialog': isVerySmall }"
+      >
+        <q-card
+          :class="{ 'full-card': isVerySmall }"
+          :style="[mobileCardStyle, { display: 'flex', flexDirection: 'column' }]"
+        >
+          <!-- HEADER: fixed -->
+          <div
+            :class="showMaximized ? 'q-mt-md' : ''"
+            style="flex: 0 0 auto; position: sticky; top: 0; z-index: 1; padding: 8px"
+          >
+            <q-btn flat round icon="close" @click="showDrawer = false" />
+            <span style="margin-left: 8px">{{ panelTitle }}</span>
+          </div>
+
+          <!-- BODY: only this scrolls -->
+          <div style="flex: 1 1 auto; overflow-y: auto; padding: 8px">
+            <component :is="currentPanelComponent" :post="activePost" :key="activePost.id + activeView" />
+
+          </div>
+        </q-card>
+      </q-dialog>
     </div>
   </q-page>
 </template>
 <script setup>
-//import { useUserStore } from "stores/user"
-//const userStore = useUserStore()
+import LikersStackAvatar from '../components/misc/LikersStackAvatar.vue'
+import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
+import { useFeedsStore } from 'stores/feedsStore'
+import { useUserStore } from 'stores/user'
+import CustomVideoPlayer from 'components/VideoPlayer.vue'
+import { useQuasar } from 'quasar'
+import { formatTime, getAvatarSrc } from '../composables/formater'
+import { EventBus } from 'boot/event-bus'
+import { getPosts } from 'src/api/posts'
+import { throttle } from 'quasar'
 
-//console.log(userStore.user)
-//console.log(userStore.token)
+//panels to show
+import CommentsPanel from 'components/CommentsPanel.vue'
+import LikesPanel from 'components/LikesPanel.vue'
+import SharePanel from 'components/SharePanel.vue'
+import LinksPanel from 'components/LinksPanel.vue'
+import MentionPanel from 'components/MentionPanel.vue'
+import SidePanelDefault from 'components/SidePanelDefault.vue'
+import LikersFollowedByMePanel from 'components/LikersFollowedByMePanel.vue'
+import PreviewProfile from 'components/ProfilePreview.vue'
+
+const feedsStore = useFeedsStore()
+const userStore = useUserStore()
+const $q = useQuasar()
+const isMobile = computed(() => $q.screen.xs || $q.screen.sm)
+const isVerySmall = computed(() => $q.screen.width < 360)
+const loading = ref(true)
+const loadingMorePosts = ref(false)
+const posts = ref([])
+const activePost = ref(null)
+const activeView = ref(null)
+const showDrawer = ref(false)
+const showMaximized = ref(false)
+
+// Map view names to components
+const panelMap = {
+  comments: CommentsPanel,
+  share: SharePanel,
+  likes: LikesPanel,
+  links: LinksPanel,
+  mention: MentionPanel,
+  'followed-by-me-who-liked-post': LikersFollowedByMePanel,
+  'profile-preview': PreviewProfile,
+}
+
+const panelNames = {
+  comments: 'Comments',
+  likes: 'Likes',
+  share: 'Share',
+  links: 'Links',
+  mention: 'Mentions',
+  'followed-by-me-who-liked-post': 'Your Friends Reaction',
+  'profile-preview': 'Profile',
+}
+
+const panelTitle = computed(() => {
+  return panelNames[activeView.value] || ''
+})
+
+// Compute mobile card style for dialog
+const mobileCardStyle = computed(() => {
+  if (isVerySmall.value) {
+    return {
+      height: '95vh',
+      borderRadius: '0',
+    }
+  }
+  // fallback to drawerHeight or default
+  return {
+    height: drawerHeight.value,
+    borderRadius: '20px 20px 0 0',
+  }
+})
+
+const panelHeights = {
+  comments: '95vh',
+  'followed-by-me-who-liked-post': '95vh',
+  'profile-preview': '95vh',
+  likes: '95vh',
+  shares: 'auto',
+  links: 'auto',
+  mention: 'auto',
+}
+const drawerHeight = computed(() => {
+  // if you wanna dynamically shrink based on actual content length:
+  if (
+    (activeView.value === 'comments' || activeView.value === 'likes') &&
+    activePost.value?.comments?.length < 3
+  ) {
+    return '45vh'
+  }
+  // fallback to the map
+  return panelHeights[activeView.value] || 'auto'
+})
+
+// Compute which component to render
+const currentPanelComponent = computed(() => {
+  return panelMap[activeView.value] || null
+})
+
+// Call this on any click, passing the post and which panel you want
+function openMeta(post, view) {
+  activePost.value = null
+  activePost.value = post
+  activeView.value = view
+  if (isMobile.value) {
+    showDrawer.value = true
+  }
+
+  if (activeView.value === 'profile-preview') {
+    showMaximized.value = true
+  } else {
+    showMaximized.value = false
+  }
+}
+
+const cursor = ref(null)
+const limit = ref(10)
+const hasMore = ref(true)
+
+async function fetchPosts(isFirst = false) {
+      if ((isFirst && loading.value === false) || (!isFirst && loadingMorePosts.value) || !hasMore.value) {
+        return;
+      }
+
+      if (isFirst) {
+          loading.value = true
+      } else {
+          loadingMorePosts.value = true
+     }
+      try {
+        const { data } = await getPosts(cursor.value, limit.value);
+        
+        const newPosts = data.posts.map((p) => ({
+            ...p,
+            showMore: false,
+            videoReady: false,
+         }))
+        
+        // Append new posts to existing ones
+        posts.value.push(...newPosts);
+         if (data.nextCursor == null) {
+           hasMore.value = false
+          } else {
+            cursor.value = data.nextCursor
+          }
+          
+      } catch (err) {
+        console.error('Error fetching posts:', err.message);
+      } finally {
+        if (isFirst) loading.value = false
+          else loadingMorePosts.value = false
+      }
+    }
+
+
+onMounted(async () => {
+  EventBus.on('successfullyShared', bumpShareCount)
+  EventBus.on('addedComment', bumpCommentCount)
+  fetchPosts(true)
+})
+
+function bumpShareCount(postId) {
+  const p = posts.value.find((p) => p.id === postId)
+  if (p) {
+    p.shareCounts = (p.shareCounts || 0) + 1
+  }
+}
+
+function bumpCommentCount(postId) {
+  const p = posts.value.find((p) => p.id === postId)
+  if (p) {
+    p.commentCounts = (p.commentCounts || 0) + 1
+  }
+}
+
+function toggleShow(post) {
+  post.showMore = !post.showMore
+}
+
+function formatPostCounts(n) {
+  if (n >= 1e9) {
+    return (n / 1e9).toFixed(1).replace(/\.0$/, '') + 'B'
+  }
+  if (n >= 1e6) {
+    return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
+  }
+  if (n >= 1e3) {
+    return (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'
+  }
+  return String(n)
+}
+
+async function toggleLike(post) {
+  try {
+    await feedsStore.toggleLike(post.id)
+
+    if (post.likedByMe) {
+      // I had it liked, now I’m unliking
+      post.likes--
+    } else {
+      // I hadn’t liked it, now I’m liking
+      post.likes++
+    }
+
+    post.likedByMe = !post.likedByMe
+  } catch (err) {
+    console.error(err.message)
+  }
+}
+
+import { followUser, unfollowUser } from '../api/people'
+async function toggleFollow(id, state) {
+  try {
+    if (state) {
+      await unfollowUser(id)
+      // Find all posts by the user and set isFollowing to false
+      posts.value.forEach((post) => {
+        if (post.user.id === id) {
+          post.user.isFollowing = false
+        }
+      })
+    } else {
+      await followUser(id)
+      // Find all posts by the user and set isFollowing to true
+      posts.value.forEach((post) => {
+        if (post.user.id === id) {
+          post.user.isFollowing = true
+        }
+      })
+    }
+  } catch (err) {
+    console.error(err.message)
+  }
+}
+
+onMounted(() => {
+  EventBus.on('updateFollowBtnState', (id) => {
+    posts.value.forEach((post) => {
+      if (post.user.id === id) {
+        post.user.isFollowing = !post.user.isFollowing
+      }
+    })
+  })
+})
+onBeforeUnmount(() => {
+  EventBus.off('successfullyShared', bumpShareCount)
+  EventBus.off('addedComment', bumpCommentCount)
+  EventBus.off('updateFollowBtnState')
+})
+
+
+async function onNearBottom(e) {
+  const el = e.target
+  const dist = el.scrollHeight - (el.scrollTop + el.clientHeight)
+  if (dist <= 300) {
+   fetchPosts()
+  }
+}
+const fetchMorePost = throttle(onNearBottom, 50)
+
+
 </script>
+
+<style scoped lang="scss">
+.follow-btn-fy {
+  &:active {
+    transform: scale(0.94);
+    background: #1baa4271;
+  }
+}
+
+.post-body {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  transition: max-height 0.3s ease;
+  white-space: pre-wrap;
+  &.collapsed {
+    -webkit-line-clamp: 5; // limit to 4 lines
+    max-height: calc(1.2em * 5); // roughly 4 lines × line-height
+  }
+}
+
+.show-more-btn {
+  border: none;
+  background: none;
+  color: green;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* in your <style lang="scss" scoped> */
+.tablet-dialog {
+  .q-card {
+    border-top-left-radius: 16px;
+    border-top-right-radius: 16px;
+    height: 80vh; // or whatever you want on tablet
+    max-height: 90vh; // cap it
+  }
+}
+
+/* Hide second column when very small */
+.hide-on-very-small {
+  display: none !important;
+}
+
+/* Full-screen dialog/card for very small */
+.full-dialog .q-dialog__inner {
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.full-card {
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
+}
+
+/* If you need extra tweaks on root when very small */
+.very-small-page {
+  /* e.g. reduce padding globally */
+}
+
+/* You can also include media queries if needed */
+@media (max-width: 359px) {
+  /* Any extra fine-tuning for elements */
+}
+
+.like-btn {
+  cursor: pointer;
+  transition: 0.4s;
+  &:active {
+    transform: scale(0.2);
+  }
+}
+</style>

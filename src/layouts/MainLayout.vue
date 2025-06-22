@@ -1,23 +1,236 @@
 <template>
-  <q-layout view="hHh lpR fFf">
-    <!-- Fixed Header with theme-aware classes -->
+  <q-layout view="hHh lpR fFf" style="height: 100vh">
+    <!-- Side Drawer for navigation on larger screens -->
+    <q-drawer
+      v-model="leftDrawerOpen"
+      show-if-above
+      bordered
+      :mini="isCollapsed"
+      :mini-width="56"
+      :width="200"
+    >
+      <div class="column full-height">
+        <!-- top toggle + list -->
+        <div>
+          <div class="row justify-end items-center q-pa-sm">
+            <q-btn
+              dense
+              flat
+              round
+              :icon="isCollapsed ? 'chevron_right' : 'chevron_left'"
+              @click="toggleCollapse"
+            />
+          </div>
+          <q-separator />
+          <div class="fit">
+            <q-list padding>
+              <q-item clickable v-ripple to="/" exact :active="$route.path === '/'">
+                <q-item-section avatar>
+                  <q-icon name="home" />
+                </q-item-section>
+                <q-item-section v-if="!isCollapsed"> For You </q-item-section>
+              </q-item>
+
+              <q-item clickable v-ripple to="/people" :active="$route.path.startsWith('/people')">
+                <q-item-section avatar>
+                  <q-icon name="people" />
+                </q-item-section>
+                <q-item-section v-if="!isCollapsed"> People </q-item-section>
+              </q-item>
+
+              <!-- after: show expansion on desktop, simple link on mobile -->
+              <template v-if="leftDrawerOpen">
+                <q-expansion-item
+                  v-model="profileExpand"
+                  dense
+                  expand-separator
+                  :default-opened="$route.path.startsWith('/profile')"
+                  expand-icon="0"
+                  expand-icon-class="hidden"
+                  header-inset-level="0"
+                >
+                  <template v-slot:header>
+                    <q-item
+                      clickable
+                      :style="isCollapsed ? 'transform: translateX(-10px);' : ''"
+                      v-ripple
+                      class="header-no-padding"
+                    >
+                      <q-item-section
+                        avatar
+                        @click="isCollapsed = isCollapsed ? false : isCollapsed"
+                      >
+                        <q-avatar size="30px">
+                          <img :src="userAvatarSrc" />
+                        </q-avatar>
+                      </q-item-section>
+
+                      <!-- Label -->
+                      <q-item-section>
+                        <q-item-label>Profile</q-item-label>
+                      </q-item-section>
+
+                      <!-- Custom Chevron Only -->
+                      <q-item-section side>
+                        <q-icon :name="profileExpand ? 'chevron_left' : 'chevron_right'" />
+                      </q-item-section>
+                    </q-item>
+                  </template>
+
+                  <q-list dense padding class="profile-children-list">
+                    <q-item
+                      clickable
+                      v-ripple
+                      :to="{ path: '/profile', query: { tab: 'posts' } }"
+                      :active="$route.path.startsWith('/profile') && $route.query.tab === 'posts'"
+                    >
+                      <q-item-section>Posts</q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      v-ripple
+                      :to="{ path: '/profile', query: { tab: 'following' } }"
+                      :active="
+                        $route.path.startsWith('/profile') && $route.query.tab === 'following'
+                      "
+                    >
+                      <q-item-section>Following</q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      v-ripple
+                      :to="{ path: '/profile', query: { tab: 'followers' } }"
+                      :active="
+                        $route.path.startsWith('/profile') && $route.query.tab === 'followers'
+                      "
+                    >
+                      <q-item-section>Followers</q-item-section>
+                    </q-item>
+                    <q-item
+                      clickable
+                      v-ripple
+                      :to="{ path: '/profile', query: { tab: 'settings' } }"
+                      :active="
+                        $route.path.startsWith('/profile') && $route.query.tab === 'settings'
+                      "
+                    >
+                      <q-item-section>Edit</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-expansion-item>
+              </template>
+              <template v-else>
+                <!-- mobile: simple link -->
+                <q-item
+                  clickable
+                  v-ripple
+                  to="/profile"
+                  :active="$route.path.startsWith('/profile')"
+                >
+                  <q-item-section avatar>
+                    <q-icon name="person" />
+                  </q-item-section>
+                  <q-item-section v-if="!isCollapsed"> Profile </q-item-section>
+                </q-item>
+              </template>
+            </q-list>
+          </div>
+        </div>
+
+        <!-- bottom actions: only on desktop -->
+        <div class="q-pa-sm" style="margin-top: auto" v-if="leftDrawerOpen">
+          <q-separator />
+          <q-list padding class="no-wrap">
+            <q-item clickable v-ripple to="/create">
+              <q-item-section avatar><q-icon name="add" /></q-item-section>
+              <q-item-section>Create</q-item-section>
+            </q-item>
+            <q-item clickable v-ripple @click="$refs.settingsPanel.open()">
+              <q-item-section avatar><q-icon name="settings" /></q-item-section>
+              <q-item-section>Settings</q-item-section>
+            </q-item>
+          </q-list>
+        </div>
+      </div>
+    </q-drawer>
+    <!-- Header -->
     <q-header elevated :class="[$q.dark.isActive ? 'bg-dark text-white' : 'bg-white text-primary']">
       <q-toolbar>
-        <q-toolbar-title>
-          <img style="margin: 6px 0 0 8px" src="~assets/logo.png" height="45" /> </q-toolbar-title
-        ><q-btn flat dense round icon="search" aria-label="Search" />
+        <q-toolbar-title class="row items-center">
+          <img style="margin: 6px 0 0 8px" src="~assets/logo.png" height="45" />
+        </q-toolbar-title>
+
+        <SettingsPanel ref="settingsPanel" />
+        <SearchPanel ref="searchPanel" />
+        <!-- Desktop: hide “add” -->
+        <q-btn
+          v-if="$q.screen.lt.md"
+          @click="openCreatePanel()"
+          flat
+          dense
+          round
+          icon="add"
+          aria-label="Create"
+        />
+        <!-- Desktop: wide rounded search button -->
+        <template v-if="leftDrawerOpen">
+          <q-btn
+            flat
+            rounded
+            dense
+            outline
+            class="q-mx-sm"
+            style="min-width: 200px; border: 1px solid #8383837d; padding: 0"
+            @click="$refs.searchPanel.open()"
+          >
+            <template v-slot:default>
+              <div style="padding: 5px 18px; width: 100%; text-align: left; text-transform: none">
+                <span class="text-grey-6" style="text-transform: none"> Search here... </span>
+              </div>
+            </template>
+          </q-btn>
+        </template>
+        <!-- Mobile: original search icon -->
+        <template v-else>
+          <q-btn
+            flat
+            dense
+            round
+            icon="search"
+            aria-label="Search"
+            @click="$refs.searchPanel.open()"
+          />
+        </template>
+
+        <q-btn flat dence round icon="fab fa-facebook-messenger" aria-label="Direct Message" />
+
+        <!-- Always present: dark/light toggle -->
         <q-btn
           flat
           dense
           round
-          :icon="modeIcon"
+          :loading="isChangingTheme"
+          :icon="$q.dark.isActive ? 'light_mode' : 'dark_mode'"
           @click="toggleDarkMode"
           aria-label="Toggle theme"
         />
-        <q-btn flat dense round icon="settings" aria-label="Settings" />
+
+        <!-- Mobile: original Settings icon -->
+        <template v-if="$q.screen.lt.md">
+          <q-btn
+            flat
+            dense
+            round
+            icon="settings"
+            aria-label="Settings"
+            @click="$refs.settingsPanel.open()"
+          />
+        </template>
       </q-toolbar>
 
+      <!-- On small screens, show tabs in header if desired -->
       <q-tabs
+        v-if="$q.screen.lt.md"
         dense
         align="justify"
         narrow-indicator
@@ -33,42 +246,149 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <q-dialog v-model="showDrawer" position="bottom" transition-show="slide-up">
+      <q-card style="height: 100vh; border-radius: 10px">
+        <div style="flex: 0 0 auto; position: sticky; top: 0; z-index: 1; padding: 8px">
+          <div
+            :style="$q.dark.isActive ? 'background: var(--q-dark);' : 'background: #fff;'"
+            style="display: flex; justify-content: space-between; align-items: center"
+          >
+            <span style="margin-left: 8px"> <i class="material-icons">public</i> Create Post </span>
+            <q-btn flat round icon="close" @click="showDrawer = false" />
+          </div>
+        </div>
+        <div style="flex: 1 1 auto; overflow-y: auto; padding: 8px">
+          <CreatePanel />
+        </div>
+      </q-card>
+    </q-dialog>
   </q-layout>
 </template>
+
 <script setup>
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import SettingsPanel from 'components/SettingsPanel.vue'
+import CreatePanel from 'components/CreatePanel.vue'
+import SearchPanel from 'components/SearchPanel.vue'
+import { ref, watch, onMounted, computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useUserStore } from 'stores/user'
+import { useSettingsStore } from 'stores/SettingsStore'
+import { getAvatarSrc } from '../composables/formater'
 
 const router = useRouter()
 const $q = useQuasar()
 const userStore = useUserStore()
+const settingsStore = useSettingsStore()
+const profileExpand = ref(false)
+const route = useRoute()
+watch(
+  () => route.path,
+  (val) => {
+    if (val.startsWith('/profile')) {
+      profileExpand.value = true
+    }
+  },
+)
 
-// This drives the theme-toggle button icon
-const modeIcon = ref('')
+// Control for side drawer open/close on small screens
+const leftDrawerOpen = ref(false)
+// Control for collapse/expand (mini mode) on all screens
+const isCollapsed = ref(true)
+const showDrawer = ref(false)
 
-// Initialize auth & theme once
+const isChangingTheme = ref(false)
+
 onMounted(async () => {
-  //console.log(userStore.user)
   const needLogin = await userStore.initialize()
   if (needLogin) {
     router.push('/auth/login')
     return
   }
-
-  // Set initial dark mode & icon
-  $q.dark.set(userStore.preferences.themeDark)
-  modeIcon.value = $q.dark.isActive ? 'light_mode' : 'dark_mode'
+  await settingsStore.fetcUserPreferedSettings()
+  $q.dark.set(settingsStore.dark)
 })
 
-function toggleDarkMode() {
-  const isDark = !$q.dark.isActive
-  $q.dark.set(isDark)
-  modeIcon.value = isDark ? 'light_mode' : 'dark_mode'
-  userStore.setUserPreferences(isDark ? 'dark' : 'light')
+async function toggleDarkMode() {
+  isChangingTheme.value = true
+  try {
+    await settingsStore.updateSettings('dark', !$q.dark.isActive)
+    $q.dark.set(!$q.dark.isActive)
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: 'Failed to change theme. connection problems',
+    })
+    console.log(err.message)
+  } finally {
+    isChangingTheme.value = false
+  }
+}
+
+function toggleCollapse() {
+  isCollapsed.value = !isCollapsed.value
+}
+
+const userAvatarSrc = computed(() => getAvatarSrc(userStore.user.avatar))
+
+function openCreatePanel() {
+  //alert("hello world")
+  showDrawer.value = true
 }
 </script>
+
 <style scoped>
-/* No additional scoped styles needed; Quasar theme classes handle colors */
+:deep(.profile-children-list) {
+  position: relative;
+  margin-left: 65px;
+  padding-left: 8px;
+}
+
+/* in your <style scoped> */
+.full-height {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.no-wrap .q-item {
+  white-space: nowrap;
+}
+
+:deep(.profile-children-list)::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: rgba(var(--q-primary-rgb), 0.3);
+  border-radius: 1px;
+}
+
+:deep(.profile-children-list .q-item) {
+  position: relative;
+}
+
+:deep(.profile-children-list .q-item)::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  width: 8px;
+  height: 2px;
+  background-color: rgba(var(--q-primary-rgb), 0.3);
+  transform: translateY(-50%);
+  border-radius: 1px;
+}
+
+:deep(.profile-children-list .q-item:hover)::before,
+:deep(.profile-children-list .q-item--active)::before {
+  background-color: var(--q-primary);
+}
+
+:deep(.profile-children-list .q-item--active .q-item__section) {
+  font-weight: 600;
+  color: var(--q-primary);
+}
 </style>

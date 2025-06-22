@@ -1,97 +1,114 @@
 <template>
-  <q-page padding>
-    <q-toolbar class="q-mb-md">
-      <q-toolbar-title class="text-h6">Discover Creators</q-toolbar-title>
-      <q-btn flat round icon="refresh" aria-label="Refresh" @click="refresh" />
-    </q-toolbar>
+  <q-page padding class="flex justify-center">
+    <!-- CENTERING CONTAINER -->
+    <div class="list-wrapper">
+      <q-toolbar class="q-mb-md">
+        <q-toolbar-title class="text-h6">Discover Creators</q-toolbar-title>
+        <q-btn flat round icon="refresh" aria-label="Refresh" @click="refresh" />
+      </q-toolbar>
 
-    <!-- LOADING SKELETON IN VIRTUAL-SCROLL -->
-    <q-virtual-scroll
-      v-if="store.loading"
-      :items="skeletonItems"
-      :item-size="72"
-      class="people-list"
-      :virtual-scroll-target="$q.screen.gt.xs ? null : 'window'"
-    >
-      <template #default>
-        <q-item class="q-py-sm flex items-center" style="height: 72px">
-          <q-item-section avatar>
-            <q-skeleton type="circle" width="40px" height="40px" />
-          </q-item-section>
+      <!-- LOADING SKELETON IN VIRTUAL-SCROLL -->
+      <q-virtual-scroll
+        v-if="store.loading"
+        :items="skeletonItems"
+        :item-size="72"
+        class="people-list"
+        :virtual-scroll-target="$q.screen.gt.xs ? null : 'window'"
+      >
+        <template #default>
+          <q-item class="q-py-sm flex items-center" style="height: 72px">
+            <q-item-section avatar>
+              <q-skeleton type="circle" width="40px" height="40px" />
+            </q-item-section>
+            <q-item-section class="q-pl-md" style="flex: 1">
+              <q-skeleton type="text" width="30%" />
+              <q-skeleton type="text" width="50%" class="q-mt-xs" />
+            </q-item-section>
+            <q-item-section side>
+              <q-skeleton type="rect" width="70px" height="28px" />
+            </q-item-section>
+          </q-item>
+        </template>
+      </q-virtual-scroll>
 
-          <q-item-section class="q-pl-md" style="flex: 1">
-            <q-skeleton type="text" width="30%" />
-            <q-skeleton type="text" width="50%" class="q-mt-xs" />
-          </q-item-section>
+      <!-- ERROR STATE -->
+      <div v-else-if="store.error" class="text-red text-center q-my-xl">
+        Failed to load users.
+        <q-btn flat label="Retry" @click="refresh" />
+      </div>
 
-          <q-item-section side>
-            <q-skeleton type="rect" width="70px" height="28px" />
-          </q-item-section>
-        </q-item>
-      </template>
-    </q-virtual-scroll>
-
-    <!-- ERROR STATE -->
-    <div v-else-if="store.error" class="text-red text-center q-my-xl">
-      Failed to load users.
-      <q-btn flat label="Retry" @click="refresh" />
+      <!-- REAL DATA -->
+      <q-virtual-scroll
+        v-else
+        :items="store.people"
+        :item-size="72"
+        class="people-list"
+        :virtual-scroll-target="$q.screen.gt.xs ? null : 'window'"
+      >
+        <template #default="{ item: user }">
+          <q-item
+            clickable
+            @click="PreviewUser(user.id)"
+            class="q-py-sm flex items-center"
+            style="height: 72px"
+          >
+            <q-item-section avatar>
+              <q-avatar>
+                <img :src="avatarSrc(user.avatar)" alt="Avatar" />
+              </q-avatar>
+            </q-item-section>
+            <q-item-section class="q-pl-md" style="flex: 1">
+              <q-item-label>{{ user.name }} </q-item-label>
+              <q-item-label caption class="bio-text">
+                @{{ user.username }} • <span class="text-green">{{ user.bio || defaultBio }}</span>
+              </q-item-label>
+            </q-item-section>
+            <q-item-section side>
+              <q-btn
+                :label="user.isFollowing ? 'Unfollow' : 'Follow'"
+                size="sm"
+                unelevated
+                color="primary"
+                :disable="actionInProgress[user.id]"
+                @click.stop="toggleFollow(user)"
+              />
+            </q-item-section>
+          </q-item>
+        </template>
+      </q-virtual-scroll>
     </div>
 
-    <!-- REAL DATA -->
-    <q-virtual-scroll
-      v-else
-      :items="store.people"
-      :item-size="72"
-      class="people-list"
-      :virtual-scroll-target="$q.screen.gt.xs ? null : 'window'"
+    <q-dialog
+      v-model="showDrawer"
+      :maximized="true"
+      position="bottom"
+      transition-show="slide-up"
+      full-width
     >
-      <template #default="{ item: user }">
-        <q-item
-          clickable
-          @click="viewProfile(user.id)"
-          class="q-py-sm flex items-center"
-          style="height: 72px"
-        >
-          <!-- AVATAR SECTION -->
-          <q-item-section avatar>
-            <q-avatar>
-              <img :src="avatarSrc(user.avatar)" alt="Avatar" />
-            </q-avatar>
-          </q-item-section>
-
-          <!-- TEXT SECTION -->
-          <q-item-section class="q-pl-md" style="flex: 1">
-            <q-item-label>{{ user.name }}</q-item-label>
-            <q-item-label caption class="bio-text">
-              {{ user.bio || defaultBio }}
-            </q-item-label>
-          </q-item-section>
-
-          <!-- BUTTON SECTION -->
-          <q-item-section side>
-            <q-btn
-              :label="user.isFollowing ? 'Unfollow' : 'Follow'"
-              size="sm"
-              unelevated
-              color="primary"
-              :disable="actionInProgress[user.id]"
-              @click.stop="toggleFollow(user)"
-            />
-          </q-item-section>
-        </q-item>
-      </template>
-    </q-virtual-scroll>
+      <q-card :style="`height: ${$q.screen.height}px;`">
+        <div class="q-mt-md" style="position: sticky; top: 0; z-index: 1; padding: 8px">
+          <q-btn flat round icon="close" @click="showDrawer = false" />
+          <span style="margin-left: 8px">Profile</span>
+        </div>
+        <div>
+          <!-- 🔥 Here’s the fix: -->
+          <ProfilePreview :post="{ user: { id: activeUserId } }" />
+        </div>
+      </q-card>
+    </q-dialog>
   </q-page>
 </template>
 
 <script setup>
-import { onMounted, reactive, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, reactive, computed } from 'vue'
+import ProfilePreview from 'components/ProfilePreview.vue'
 import { usePeopleStore } from 'stores/peopleStore'
 
 const store = usePeopleStore()
-const router = useRouter()
 const actionInProgress = reactive({})
+
+const activeUserId = ref(null)
+const showDrawer = ref(false)
 
 const defaultBio = 'Hey there, I’m using Ethred…'
 // array of 5 placeholders for skeleton
@@ -99,10 +116,6 @@ const skeletonItems = computed(() => Array(10).fill(null))
 
 function refresh() {
   store.fetchAll()
-}
-
-function viewProfile(id) {
-  router.push({ path: `/people/${id}` })
 }
 
 function avatarSrc(filename) {
@@ -122,14 +135,34 @@ async function toggleFollow(user) {
 onMounted(() => {
   if (!store.people.length) store.fetchAll()
 })
+
+function PreviewUser(id) {
+  activeUserId.value = id
+  showDrawer.value = true
+}
 </script>
 
 <style scoped>
+/* 1) Make the page a flex container and center its child horizontally */
+.q-page.flex {
+  display: flex;
+  justify-content: center;
+}
+
+/* 2) Wrapper: full-width up to a max, centered via margin auto */
+.list-wrapper {
+  width: 100%;
+  max-width: 700px; /* or whatever max you like */
+  margin: 0 auto;
+  padding: 0; /* small gutter on very narrow viewports */
+}
+
+/* 3) Virtual-scroll list height adjustment */
 .people-list {
   height: calc(100vh - 160px);
 }
 
-/* one-line bio with ellipsis */
+/* 4) One-line bio with ellipsis */
 .bio-text {
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -138,6 +171,7 @@ onMounted(() => {
   text-overflow: ellipsis;
 }
 
+/* 5) Ensure each item stays 72px tall and centered vertically */
 .people-list .q-item {
   height: 72px;
   display: flex;

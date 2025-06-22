@@ -12,3 +12,7 @@ export function followUser(id) {
 export function unfollowUser(id) {
   return api.delete(`/users/${id}/follow`)
 }
+
+export function getProfileCounts() {
+  return api.get(`/users/profile/counts`)
+}

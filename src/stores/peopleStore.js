@@ -14,7 +14,7 @@ export const usePeopleStore = defineStore('peopleStore', {
       this.error = null
       try {
         const { data } = await getUsers()
-        console.log(data)
+        //console.log(data)
         this.people = data
       } catch (err) {
         this.error = err

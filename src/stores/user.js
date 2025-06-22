@@ -7,11 +7,6 @@ export const useUserStore = defineStore('user', {
   state: () => ({
     user: null,
     token: null,
-    following: [],
-    followers: [],
-    preferences: {
-      themeDark: LocalStorage.getItem('themeDark') || false,
-    },
   }),
   getters: {
     isLoggedIn: (state) => !!state.token,
@@ -35,43 +30,10 @@ export const useUserStore = defineStore('user', {
 
     async fetchUsersData() {
       try {
-        const res = await api.post('/users/token/refresh')
-        this.user = res.data.user
+        const { data } = await api.post('/users/token/refresh')
+        this.user = data.user
       } catch (err) {
         console.error(err)
-      }
-    },
-
-    async fetchFollowing() {
-      try {
-        const res = await api.get('users/following/list')
-        this.following = res.data
-        console.log(res.data)
-      } catch (err) {
-        console.error(err)
-      }
-    },
-
-    async fetchFollowers() {
-      try {
-        const res = await api.get('users/followers/list')
-        console.log(res.data)
-        this.followers = res.data
-      } catch (err) {
-        console.error(err)
-      }
-    },
-
-    setUserPreferences(val) {
-      if (val === 'dark') {
-        this.preferences.themeDark = true
-        LocalStorage.set('themeDark', true)
-        //console.log(this.preferences)
-      }
-      if (val === 'light') {
-        this.preferences.theme = false
-        LocalStorage.set('themeDark', false)
-        //console.log(this.preferences)
       }
     },
 
@@ -87,12 +49,16 @@ export const useUserStore = defineStore('user', {
         console.log(res.data.message)
         this.user = null
         this.token = null
-        //LocalStorage.remove("themeDark")
+        LocalStorage.clear()
       } catch (err) {
         if (err) {
           console.log(err)
         }
       }
+    },
+
+    async logout() {
+      await this.clearUser()
     },
   },
 })

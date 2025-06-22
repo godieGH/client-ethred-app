@@ -4,6 +4,9 @@
 import { defineConfig } from '#q-app/wrappers'
 import { fileURLToPath } from 'node:url'
 
+import { config } from 'dotenv'
+config()
+
 export default defineConfig((ctx) => {
   return {
     // https://v2.quasar.dev/quasar-cli-vite/prefetch-feature
@@ -12,7 +15,7 @@ export default defineConfig((ctx) => {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['global-mixin', 'axios', 'eruda'],
+    boot: ['global-mixin', 'axios', 'eruda', 'event-bus', 'global-components'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],
@@ -83,7 +86,9 @@ export default defineConfig((ctx) => {
               useFlatConfig: true,
             },
           },
-          { server: false },
+          {
+            server: false,
+          },
         ],
       ],
     },
@@ -96,9 +101,19 @@ export default defineConfig((ctx) => {
 
       proxy: {
         '/uploads': {
-          target: 'http://localhost:3000' || process.env.VITE_API_BASE_URL,
+          target: process.env.VITE_API_BASE_URL,
           changeOrigin: true,
         },
+        '/socket.io': {
+          target: process.env.VITE_API_BASE_URL,
+          ws: true, // ← Important: WebSocket needs ws: true
+          changeOrigin: true,
+        },
+        // (Optional) If you also have a REST API namespace under /api:
+        /* '/api': {
+          target: process.env.VITE_API_BASE_URL,
+          changeOrigin: true,
+        },*/
       },
     },
 
@@ -122,7 +137,7 @@ export default defineConfig((ctx) => {
       //directives: ["TouchSwipe"],
 
       // Quasar plugins
-      plugins: ['Cookies', 'Notify'],
+      plugins: ['Cookies', 'Notify', 'Dialog', 'Loading'],
     },
 
     // animations: 'all', // --- includes all animations

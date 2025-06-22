@@ -1,8 +1,8 @@
 {
   "name": "quasar-project",
   "version": "0.0.1",
-  "description": "A Quasar Project",
-  "productName": "Quasar App",
+  "description": "Ethred Social Media App Project",
+  "productName": "Ethred",
   "author": "godieGH <lilwizzemcee@gmail.com>",
   "type": "module",
   "private": true,
@@ -16,14 +16,27 @@
     "postinstall": "quasar prepare"
   },
   "dependencies": {
+    "@bigdatacloudapi/client": "^1.1.4",
+    "@imndx/v-emoji-picker-vue3": "^3.0.3",
     "@quasar/extras": "^1.16.4",
-    "axios": "^1.2.1",
+    "axios": "^1.10.0",
+    "bigdatacloud-reverse-geocoding": "^0.2.0",
     "bootstrap": "^5.3.6",
+    "date-fns": "^4.1.0",
+    "emoji-mart-vue-fast": "^15.0.4",
+    "emoji-picker-element": "^1.26.3",
+    "lodash.debounce": "^4.0.8",
     "pinia": "^3.0.1",
     "quasar": "^2.16.0",
+    "socket.io-client": "^4.8.1",
+    "textarea-caret": "^3.1.0",
     "vue": "^3.4.18",
     "vue-router": "^4.0.0",
+    "vue3-emoji-picker": "^1.1.8",
     "vue3-google-login": "^2.0.33"
+  },
+  "overrides": {
+    "follow-redirects": "^1.15.6"
   },
   "devDependencies": {
     "@eslint/js": "^9.14.0",

@@ -23,7 +23,20 @@ export default defineRouter(async ({ store }) => {
       : createWebHashHistory
 
   const Router = createRouter({
-    scrollBehavior: () => ({ left: 0, top: 0 }),
+    scrollBehavior(to, from, savedPosition) {
+      if (to.hash) {
+        return {
+          el: to.hash,
+          behavior: 'smooth',
+          // Quasar: Adjust 'top' if you have fixed headers/toolbars
+          top: 50, // Example: If your QHeader is 50px tall
+        }
+      } else if (savedPosition) {
+        return savedPosition
+      } else {
+        return { top: 0, left: 0 }
+      }
+    },
     routes,
     history: createHistory(process.env.VUE_ROUTER_BASE),
   })
