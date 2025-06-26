@@ -1,7 +1,6 @@
 <template>
   <div class="profile-page">
     <div class="profile-wrapper" style="padding-top: 30px">
-      <!-- HEADER: Skeleton when loading, real content otherwise -->
       <div v-if="loading" class="column items-center text-center q-mb-lg">
         <q-skeleton type="circle" width="120px" height="120px" />
         <q-skeleton type="text" width="40%" class="q-mt-md" />
@@ -35,7 +34,6 @@
         />
       </div>
 
-      <!-- COUNTS ROW -->
       <div v-if="!loading" class="row justify-around counts-row">
         <div class="column items-center">
           <div class="text-h6">
@@ -57,8 +55,7 @@
         </div>
       </div>
 
-      <!-- TAB PANEL -->
-      <div v-if="!loading" class="tabs-container q-pa-sm q-mt-lg">
+      <div v-if="!loading" class="tabs-container">
         <q-tabs
           v-model="tab"
           class="text-primary"
@@ -66,98 +63,58 @@
           indicator-color="primary"
           dense
         >
-          <q-tab name="posts" label="Posts" class="tab-label" />
-          <q-tab name="media" label="Media" class="tab-label" />
-          <q-tab name="contact" label="Contact" class="tab-label" />
+          <q-tab name="posts" label="Posts" class="tab-label text-grey" />
+          <q-tab name="media" label="Media" class="tab-label text-grey" />
+          <q-tab name="contact" label="Contact" class="tab-label text-grey" />
         </q-tabs>
 
-        <q-tab-panels v-model="tab" animated>
-          <q-tab-panel name="posts">
-            <div v-if="!user.posts || user.posts.length === 0" class="text-grey">No posts yet.</div>
+        <q-tab-panels style="margin-top: 10px" v-model="tab" animated>
+          <q-tab-panel style="padding: 0" name="posts">
+            <div v-if="!user.postsCount" class="text-grey">No posts yet.</div>
             <div v-else>
-              <q-card v-for="post in user.posts" :key="post.id" class="q-mb-md" flat bordered>
-                <!-- Header: Avatar and Username (adjust as needed) -->
-                <q-card-section class="row items-center">
-                  <div class="q-ml-sm">
-                    <div class="text-caption text-grey">
-                      {{ formatDate(post.createdAt) }}
-                    </div>
-                  </div>
-                </q-card-section>
-
-                <!-- Content based on type -->
-                <q-card-section>
-                  <!-- Text Post -->
-                  <div v-if="post.type === 'text'" class="text-body1">
-                    {{ post.body }}
-                  </div>
-
-                  <!-- Image Post -->
-                  <div v-else-if="post.type === 'image'">
-                    <q-img
-                      src="/uploads/avatar-4-1748267859037.jpg"
-                      ratio="16/9"
-                      class="rounded-borders"
-                    />
-                    <div v-if="post.body" class="q-mt-sm text-caption">
-                      {{ post.body }}
-                    </div>
-                  </div>
-
-                  <!-- Video Post -->
-                  <div v-else-if="post.type === 'video'">
-                    <video
-                      controls
-                      :src="post.mediaUrl"
-                      class="q-mb-sm"
-                      style="width: 100%; max-height: 400px"
-                    ></video>
-                    <div v-if="post.body" class="text-caption">
-                      {{ post.body }}
-                    </div>
-                  </div>
-
-                  <!-- Link Post -->
-                  <div v-else-if="post.type === 'link'">
-                    <div>
-                      <a :href="post.linkUrl" target="_blank" class="text-primary">
-                        {{ post.linkUrl }}
-                      </a>
-                    </div>
-                    <div v-if="post.body" class="q-mt-sm text-caption">
-                      {{ post.body }}
-                    </div>
-                  </div>
-
-                  <!-- Fallback -->
-                  <div v-else>
-                    <div class="text-body1">
-                      {{ post.body || 'Unsupported post type' }}
-                    </div>
-                  </div>
-                </q-card-section>
-
-                <!-- Action Buttons -->
-                <q-card-actions align="between">
-                  <q-btn flat round icon="far fa-comment" />
-                  <q-btn flat round icon="send" />
-                  <q-btn flat round icon="favorite_border" />
-                </q-card-actions>
-              </q-card>
+              <postsTab :user="user" />
             </div>
           </q-tab-panel>
 
-          <q-tab-panel name="media">
+          <q-tab-panel style="padding: 0" name="media">
             <div v-if="!user.media || user.media.length === 0" class="text-grey">
               No media uploaded.
             </div>
-            <div v-else class="row wrap media-grid">
-              <q-img
-                v-for="item in user.media"
+            <div v-else class="media-gallery">
+              <div
+                v-for="(item, index) in user.media"
                 :key="item.id"
-                :src="mediaUrl(item.file)"
-                class="q-mr-sm q-mb-sm media-thumb"
-              />
+                class="media-item"
+                @mouseenter="handleVideoHover(index, true)"
+                @mouseleave="handleVideoHover(index, false)"
+              >
+                <q-img
+                  v-if="item.type === 'image'"
+                  :src="item.mediaUrl"
+                  class="media-content"
+                  fit="cover"
+                  clickable
+                  @click="openMediaPreviewer(item.mediaUrl, 'image')"
+                />
+                <video
+                  v-else-if="item.type === 'video'"
+                  :src="item.originalMedia"
+                  @click="openMediaPreviewer(item.mediaUrl, 'video', item.thumbnailUrl)"
+                  muted
+                  :poster="item.thumbnailUrl"
+                  loop
+                  playsinline
+                  class="media-content video-item"
+                  :ref="
+                    (el) => {
+                      if (el) videoRefs[index] = el
+                    }
+                  "
+                ></video>
+                <div v-if="item.type === 'video'" class="video-overlay">
+                  <q-icon name="videocam" color="white" size="24px" />
+                </div>
+              </div>
             </div>
           </q-tab-panel>
 
@@ -228,12 +185,33 @@
       </div>
     </div>
   </div>
+
+  <q-dialog v-model="previewMedia" position="bottom" transition-show="slide-up">
+    <q-card
+      :style="{
+        padding: '10px',
+        'border-radius': '20px',
+        position: 'relative',
+        display: 'flex',
+        'flex-direction': 'column',
+        height: 'auto',
+        width: '100%',
+        'max-width': '600px',
+      }"
+    >
+      <span class="handle-close" @click="closeMediaPreviewer()"></span>
+
+      <div style="flex: 1 1 auto; overflow-y: auto; padding: 8px">
+        <component :is="currentMediaPreviewer" :src="currentSrc" :poster="videoPoster" />
+      </div>
+    </q-card>
+  </q-dialog>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import postsTab from 'components/misc/postsTab.vue'
+import { ref, onMounted, computed, watch, shallowRef } from 'vue'
 import { api } from 'boot/axios'
-import { QAvatar, QBtn, QImg, QTabs, QTab, QTabPanels, QTabPanel, QSkeleton } from 'quasar'
 import { useQuasar } from 'quasar'
 import { useUserStore } from 'stores/user'
 import { useSettingsStore } from 'stores/SettingsStore'
@@ -255,17 +233,45 @@ const user = ref({
   followersCount: 0,
   followingCount: 0,
   isFollowing: false,
-  posts: [],
-  media: [],
   bio: '',
+  media: [], // Initialize media as an empty array
 })
 const tab = ref('posts')
 const showFullBio = ref(false)
+const previewMedia = ref(false)
+
+import PreviewImage from './misc/PreviewImage.vue'
+import PreviewVideo from './VideoPlayer.vue'
+
+const currentMediaPreviewer = shallowRef(null)
+const currentSrc = ref(null)
+const videoPoster = ref(null)
+function openMediaPreviewer(src, type, poster = null) {
+  previewMedia.value = true
+  if (type === 'image') {
+    currentMediaPreviewer.value = PreviewImage
+    currentSrc.value = src
+  }
+  if (type === 'video') {
+    currentMediaPreviewer.value = PreviewVideo
+    currentSrc.value = src
+    videoPoster.value = poster
+    console.log(poster)
+  }
+}
+
+function closeMediaPreviewer() {
+  previewMedia.value = false
+  currentSrc.value = null
+}
+
+// Ref to store video elements
+const videoRefs = ref([])
 
 const avatarUrl = computed(() =>
   user.value.avatar ? `/uploads/${user.value.avatar}` : '/default.png',
 )
-const mediaUrl = (file) => `/uploads/${file}`
+
 const buttonLabel = computed(() => (user.value.isFollowing ? 'Unfollow' : 'Follow'))
 
 const isBioLong = computed(() => user.value.bio && user.value.bio.length > 80)
@@ -281,21 +287,41 @@ onMounted(async () => {
     user.value = {
       ...data,
       contact: data.contact || {},
+      media: data.media || [], // Ensure media is initialized from fetched data
     }
+    //console.log(user.value)
     loading.value = false
   } catch (err) {
     console.error(err.message)
   }
-
-  /*try {
-    const { data } = await api.get('/posts/')
-    user.value.posts = data
-
-    console.log(user.value.posts)
-  } catch (err) {
-    console.error(err.message)
-  }*/
 })
+
+// Watch for tab changes to pause all videos when switching away from "media" tab
+watch(tab, (newTab) => {
+  if (newTab !== 'media') {
+    videoRefs.value.forEach((video) => {
+      if (video) {
+        video.pause()
+        video.currentTime = 0 // Rewind to start
+      }
+    })
+  }
+})
+
+function handleVideoHover(index, isHovering) {
+  const video = videoRefs.value[index]
+  if (video) {
+    if (isHovering) {
+      video.play().catch((error) => {
+        // Autoplay might be blocked by browsers, handle the error gracefully
+        console.warn('Autoplay prevented:', error)
+      })
+    } else {
+      video.pause()
+      video.currentTime = 0 // Rewind to start when mouse leaves
+    }
+  }
+}
 
 async function toggleFollow() {
   if (followLoading.value) return
@@ -318,6 +344,7 @@ async function toggleFollow() {
     user.value = {
       ...data,
       contact: data.contact || {},
+      media: data.media || [],
     }
   } catch (err) {
     // rollback
@@ -344,40 +371,16 @@ const twitterUrl = computed(() => {
   const handle = user.value.contact?.twitter?.replace(/^@/, '')
   return handle ? `https://x.com/${handle}` : ''
 })
-
-function formatDate(iso) {
-  const now = new Date()
-  const d = new Date(iso)
-  const diff = now - d // ms
-  const sec = Math.floor(diff / 1000)
-  const min = Math.floor(sec / 60)
-  const hr = Math.floor(min / 60)
-  const day = Math.floor(hr / 24)
-  const wk = Math.floor(day / 7)
-  const mo = Math.floor(day / 30)
-  const yr = Math.floor(day / 365)
-
-  if (sec < 60) return `${sec}s ago`
-  if (min < 60) return `${min}m ago`
-  if (hr < 24) return `${hr}h ago`
-  if (day < 7) return `${day}d ago`
-  if (wk < 8) return `${wk}w ago` // covers up to ~55 days
-  if (mo < 2) return `${wk}w ago` // 4–8 weeks
-  // beyond ~60 days
-  const optsSameYear = { day: 'numeric', month: 'short' }
-  const optsDiffYear = { day: 'numeric', month: 'short', year: '2-digit' }
-  if (yr >= 1) return `${yr}y ago` // only once you hit ≥365 days
-  if (d.getFullYear() === now.getFullYear()) {
-    return d.toLocaleDateString('en-US', optsSameYear)
-  }
-  return d.toLocaleDateString('en-US', optsDiffYear)
-}
 </script>
+
 <style scoped>
 .profile-page {
   display: flex;
   justify-content: center;
-  width: 100%; /* ← add this */
+  width: 100%;
+  overflow-y: scroll;
+  height: 95vh;
+  padding-bottom: 20px;
 }
 
 .profile-wrapper {
@@ -395,10 +398,48 @@ function formatDate(iso) {
   width: 100%;
 }
 
-/* Media grid thumbnails */
-.media-thumb {
-  width: 100px;
-  height: 100px;
+/* New styles for the media gallery */
+.media-gallery {
+  display: grid;
+  /* Adjust minmax(100px, 1fr) for desired minimum item size and responsiveness */
+  /* This creates columns that are at least 100px wide, and as many as can fit */
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 2px; /* Small gap between items, like Instagram */
+  width: 100%;
+}
+
+.media-item {
+  position: relative; /* For video overlay positioning */
+  width: 100%;
+  padding-bottom: 100%; /* Creates a square aspect ratio container */
+  overflow: hidden; /* Hide anything that goes outside the square */
+}
+
+.media-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Ensures images/videos fill the container without distortion */
+  display: block; /* Remove extra space below images/videos */
+}
+
+.video-item {
+  /* No specific styles needed here unless you want to override something */
+}
+
+.video-overlay {
+  position: absolute;
+  top: 4px; /* Adjust as needed */
+  right: 4px; /* Adjust as needed */
+  background-color: rgba(0, 0, 0, 0.4); /* Semi-transparent background for visibility */
+  border-radius: 4px;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1; /* Ensure it's above the video */
 }
 
 /* Existing styles */
@@ -421,7 +462,7 @@ function formatDate(iso) {
 }
 
 .bio {
-  white-space: pre-line; /* or “pre-wrap” if you also want to preserve extra spaces */
+  white-space: pre-line;
   font-size: 0.75rem;
   color: gray;
   word-break: break-word;
@@ -435,9 +476,28 @@ function formatDate(iso) {
   .profile-wrapper {
     padding: 0;
   }
+  .media-gallery {
+    /* For larger screens, maybe more columns or larger min-width */
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
 }
 
 .rounded-borders {
   border-radius: 8px;
+}
+
+.my-media-card {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.handle-close {
+  background: grey;
+  padding: 3px 10px;
+  width: 40px;
+  position: absolute;
+  top: 5px;
+  right: 45%;
+  border-radius: 20px;
 }
 </style>

@@ -4,23 +4,20 @@
     class="video-wrapper"
     @click="onTap"
     @dblclick.prevent="toggleMute"
-    @touchstart="onTouchStart"
-    @touchmove.prevent="onTouchMove"
-    @touchend="onTouchEnd"
+    v-touch-pan.horizontal.prevent.mouse="onPan"
     @contextmenu.prevent
   >
-    <!-- Skeleton placeholder until video is ready to play -->
     <q-skeleton
       v-if="initialLoading"
       type="rect"
-      :aspect-ratio="16 / 9"
+      :aspect-ratio="9 / 16"
       width="100%"
       class="skeleton-overlay"
     />
     <video
+      :poster="poster"
       v-show="!initialLoading"
       ref="video"
-      :src="src"
       preload="metadata"
       :muted="mute"
       @waiting="onBuffering"
@@ -33,7 +30,6 @@
       webkit-playsinline
     ></video>
 
-    <!-- Loading spinner during buffering -->
     <q-spinner
       v-if="loading"
       class="overlay text-white"
@@ -42,7 +38,6 @@
       :thickness="4"
     />
 
-    <!-- Play/Pause button -->
     <q-icon
       v-if="showPlayButton && !initialLoading"
       :name="isPlaying ? 'pause_circle_filled' : 'play_circle_filled'"
@@ -50,12 +45,10 @@
       class="overlay play-btn text-white"
     />
 
-    <!-- Seek timestamp overlay -->
     <div v-if="seeking" class="overlay seek-timestamp">
       {{ formatTime(currentTime) }}
     </div>
 
-    <!-- Mute icon -->
     <q-icon
       v-if="mute && !initialLoading"
       name="volume_off"
@@ -64,57 +57,79 @@
     />
   </div>
 </template>
+
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { EventBus } from 'boot/event-bus'
 import { QSpinner, QIcon, QSkeleton } from 'quasar'
 import { useSettingsStore } from 'stores/SettingsStore'
+import Hls from 'hls.js'
 
-// Only extract src prop
-const { src } = defineProps({ src: { type: String, required: true } })
+const props = defineProps({
+  src: { type: String, required: true },
+  poster: String,
+})
 const settingsStore = useSettingsStore()
 
 const video = ref(null)
 const wrapper = ref(null)
 const isPlaying = ref(false)
-const loading = ref(false)
+const loading = ref(false) // Controls the spinner (buffering)
 const showPlayButton = ref(true)
 const seeking = ref(false)
 const currentTime = ref(0)
-const initialLoading = ref(true)
+const initialLoading = ref(true) // Always starts as true since src is always there and needs loading
+const isIntersecting = ref(false) // Reactive variable to track intersection state
 
-//What user settings say
+let hls = null
+
 const autoplay = computed(() => settingsStore.autoplay)
 const mute = computed({
   get: () => settingsStore.mute,
   set: (val) => {
     settingsStore.mute = val
+    if (video.value) video.value.muted = val
+    broadcastMuteChange(val)
   },
 })
 
 const emit = defineEmits(['ready'])
 
-let touchStartX = 0
-let touchStartY = 0
-let touchAccum = 0
-
 function broadcastPauseOthers() {
   EventBus.emit('pause-all')
 }
 
+// Function to play video, incorporating the pause-all broadcast
+function playVideo() {
+  if (video.value) {
+    broadcastPauseOthers() // Pause other videos before playing this one
+    video.value.play().catch((e) => {
+      console.warn('Autoplay was prevented (playVideo):', e)
+      // Important: Only attempt to mute and retry if the video is *not* already muted
+      // and the error is due to autoplay policy (NotAllowedError or similar).
+      if (e.name === 'NotAllowedError' && !video.value.muted) {
+        video.value.muted = true
+        // Re-check if autoplay is still desired (intersecting) before retrying with mute
+        if (autoplay.value && isIntersecting.value) {
+          video.value
+            .play()
+            .catch((e2) => console.warn('Autoplay failed even with mute (playVideo):', e2))
+        }
+      }
+    })
+  }
+}
+
 function onTap() {
   if (initialLoading.value) return
-  if (Math.abs(touchAccum) > 10) {
-    touchAccum = 0
-    return
-  }
-  isPlaying.value ? video.value.pause() : (broadcastPauseOthers(), video.value.play())
+  if (seeking.value) return // If we were seeking, don't trigger tap
+
+  isPlaying.value ? video.value.pause() : playVideo()
 }
 
 function toggleMute() {
   if (initialLoading.value) return
   mute.value = !mute.value
-  broadcastMuteChange(mute.value)
 }
 
 function onBuffering() {
@@ -125,6 +140,8 @@ function onPlaying() {
   loading.value = false
   isPlaying.value = true
   showPlayButton.value = false
+  initialLoading.value = false
+  // `playVideo()` already handles pausing others, no need to re-broadcast here.
 }
 
 function onPaused() {
@@ -135,84 +152,84 @@ function onPaused() {
 function onEnded() {
   isPlaying.value = false
   showPlayButton.value = true
+  // Optional: loop video or play next
 }
 
 function onTimeUpdate() {
-  if(video.value) {
-     currentTime.value = video.value.currentTime
-   }
-}
-
-function onCanPlay() {
   if (video.value) {
-    video.value.muted = mute.value
-    initialLoading.value = false
-    emit('ready')
-  } else {
-    // Optional: Log a warning if this happens, for debugging purposes
-    //console.warn("video.value was null in onCanPlay. Race condition?");
+    currentTime.value = video.value.currentTime
   }
 }
 
-function onTouchStart(e) {
-  if (initialLoading.value) return
-  touchStartX = e.touches[0].clientX
-  touchStartY = e.touches[0].clientY
-  seeking.value = true
+let initialSeekTime = ref(0)
+
+function onCanPlay() {
+  // This signals that enough media is loaded to begin playback
+  if (video.value) {
+    initialLoading.value = false // Hide skeleton
+    emit('ready')
+
+    // If autoplay is enabled AND we are currently intersecting, attempt to play.
+    // This handles the initial load for videos already in view.
+    // The IntersectionObserver will handle subsequent plays as it enters view.
+    if (autoplay.value && isIntersecting.value && !isPlaying.value) {
+      playVideo()
+    }
+  }
 }
 
-function onTouchMove(e) {
-  const dx = e.touches[0].clientX - touchStartX
-  const dy = e.touches[0].clientY - touchStartY
-  if (Math.abs(dy) > Math.abs(dx)) return
-  touchAccum = dx
-  const seekSeconds = dx / 400
-  const newTime = Math.max(0, Math.min(video.value.duration, video.value.currentTime + seekSeconds))
+function onPan({ direction, isFirst, isFinal, offset }) {
+  if (initialLoading.value) return
+
+  if (direction !== 'left' && direction !== 'right') {
+    return
+  }
+
+  if (isFirst) {
+    seeking.value = true
+    if (isPlaying.value) {
+      video.value.pause()
+    }
+    // Store the initial current time when seeking starts
+    initialSeekTime.value = video.value.currentTime
+  }
+
+  const seekSensitivity = 10
+  const seekDelta = offset.x / seekSensitivity
+
+  let newTime = initialSeekTime.value + seekDelta
+
+  if (video.value.duration) {
+    newTime = Math.max(0, Math.min(video.value.duration, newTime))
+  } else {
+    newTime = Math.max(0, newTime)
+  }
+
   video.value.currentTime = newTime
   currentTime.value = newTime
-}
 
-function onTouchEnd() {
-  seeking.value = false
-  touchAccum = 0
+  if (isFinal) {
+    seeking.value = false
+    // If it was playing before seeking, resume play after seeking
+    // Unless autoplay is off and it was paused before seeking
+    if (!showPlayButton.value && autoplay.value && isIntersecting.value) {
+      playVideo()
+    } else if (!showPlayButton.value && !autoplay.value) {
+      // If autoplay is off but it was playing, resume after seek
+      playVideo()
+    }
+  }
 }
 
 function onPauseAll() {
-  if (video.value && isPlaying.value) video.value.pause()
+  if (video.value && isPlaying.value) {
+    video.value.pause()
+  }
 }
-
-let observer
-onMounted(() => {
-  EventBus.on('pause-all', onPauseAll)
-  EventBus.on('mute-change', onGlobalMuteChange)
-  observer = new IntersectionObserver(
-    ([entry]) => {
-      if (entry.isIntersecting) {
-        if (autoplay.value) {
-          broadcastPauseOthers()
-          video.value.play()
-        }
-      } else {
-        video.value.pause()
-      }
-    },
-    { threshold: 0.5 },
-  )
-  wrapper.value && observer.observe(wrapper.value)
-
-  if (video.value) video.value.muted = mute.value
-})
 
 function onGlobalMuteChange(newMute) {
   mute.value = newMute
-  if (video.value) video.value.muted = newMute
 }
-
-onBeforeUnmount(() => {
-  EventBus.off('pause-all', onPauseAll)
-  EventBus.off('mute-change', onGlobalMuteChange)
-  wrapper.value && observer.unobserve(wrapper.value)
-})
 
 function broadcastMuteChange(newMuteState) {
   EventBus.emit('mute-change', newMuteState)
@@ -223,18 +240,120 @@ function formatTime(sec) {
   const s = String(Math.floor(sec % 60)).padStart(2, '0')
   return `${m}:${s}`
 }
+
+function loadHlsVideo() {
+  initialLoading.value = true
+  if (hls) {
+    hls.destroy()
+    hls = null
+  }
+
+  if (video.value && Hls.isSupported()) {
+    hls = new Hls()
+    hls.loadSource(props.src)
+    hls.attachMedia(video.value)
+
+    // Use a single listener for readiness, HLS will typically fire MANIFEST_PARSED early.
+    hls.once(Hls.Events.MANIFEST_PARSED, onCanPlay)
+
+    hls.on(Hls.Events.ERROR, function (event, data) {
+      if (data.fatal) {
+        console.error('HLS fatal error encountered:', data)
+        initialLoading.value = false
+        hls.destroy()
+      } else {
+        EventBus.on('pause-all', onPauseAll)
+        console.warn('HLS non-fatal error:', data)
+      }
+    })
+    video.value.muted = mute.value
+  } else if (video.value && video.value.canPlayType('application/vnd.apple.mpegurl')) {
+    // Native HLS playback for Safari/iOS
+    video.value.src = props.src
+    video.value.addEventListener('loadedmetadata', onCanPlay, { once: true })
+    video.value.muted = mute.value
+  } else {
+    console.error('This browser does not support HLS or native HLS playback. Consider a fallback.')
+    initialLoading.value = false
+  }
+}
+
+let observer
+onMounted(() => {
+  loadHlsVideo() // Initial load of the video
+
+  EventBus.on('pause-all', onPauseAll)
+  EventBus.on('mute-change', onGlobalMuteChange)
+
+  observer = new IntersectionObserver(
+    ([entry]) => {
+      isIntersecting.value = entry.isIntersecting // Update intersection state
+
+      if (entry.isIntersecting) {
+        // Only attempt to play if autoplay is enabled, not already playing,
+        // AND the video is no longer in its initial loading state.
+        // `onCanPlay` handles the initial play for videos that start in view.
+        if (autoplay.value && !isPlaying.value && !initialLoading.value) {
+          playVideo()
+        }
+      } else {
+        // When video leaves viewport, always pause it
+        if (isPlaying.value) {
+          video.value.pause()
+        }
+      }
+    },
+    { threshold: 0.7 },
+  )
+  wrapper.value && observer.observe(wrapper.value)
+})
+
+watch(
+  () => props.src,
+  (newSrc, oldSrc) => {
+    if (newSrc !== oldSrc) {
+      console.log(`Video source changed from ${oldSrc} to ${newSrc}. Reloading HLS.`)
+      // When source changes, re-initialize, which will trigger loadHlsVideo()
+      // and effectively reset initialLoading to true.
+      loadHlsVideo()
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  EventBus.off('pause-all', onPauseAll)
+  EventBus.off('mute-change', onGlobalMuteChange)
+  if (wrapper.value && observer) {
+    observer.unobserve(wrapper.value)
+  }
+
+  if (hls) {
+    hls.destroy()
+    hls = null
+  }
+  // Explicitly pause video on unmount to prevent lingering audio/video processes
+  if (video.value) {
+    video.value.pause()
+    video.value.src = '' // Clear source
+    video.value.load() // Load empty to free resources
+  }
+})
 </script>
+
 <style scoped>
+/* Your existing styles remain */
 .video-wrapper {
   position: relative;
   width: 100%;
-  touch-action: pan-y;
+  /* Added for touch-scrolling prevention, if needed */
+  /* touch-action: pan-y; */
 }
 
 video {
   width: 100%;
   border-radius: 8px;
   display: block;
+  background: black; /* Good for HLS to prevent flashes */
 }
 
 .overlay {

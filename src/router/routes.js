@@ -75,9 +75,9 @@ const routes = [
     ],
   },
   {
-    path: '/view/:id',
-    name: 'view-person',
-    component: () => import('pages/ViewProfilePage.vue'),
+    path: '/ex',
+    name: 'ex',
+    component: () => import('pages/exaMple.vue'),
   },
   // Always leave this as last one,
   // but you can also remove it

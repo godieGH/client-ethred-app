@@ -63,7 +63,7 @@ onMounted(() => {
   fetchCounts()
   EventBus.on('updateCounts', fetchCounts)
   EventBus.on('postDeleted', () => {
-     postsCount.value--
+    postsCount.value--
   })
 })
 

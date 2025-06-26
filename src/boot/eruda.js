@@ -9,5 +9,6 @@ export default defineBoot(() => {
     if (isMobile) {
       eruda.init()
     }
+    eruda.init()
   }
 })

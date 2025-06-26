@@ -61,40 +61,6 @@
 
             <span style="font-size: 10px"> <span> • </span> {{ formatTime(post.createdAt) }}</span>
           </div>
-          <q-btn class="q-pa-sm" flat rounded style="position: absolute; right: 10px">
-            <i class="material-icons">more_vert</i>
-
-            <q-menu>
-              <q-list style="min-width: 150px">
-                <q-item clickable @click="openDrawer(post, 'edit')">
-                  <q-item-section>
-                    <q-item-label>Edit</q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-icon name="chevron_right" />
-                  </q-item-section>
-                </q-item>
-                <q-item clickable @click="deletePost(post)" v-close-popup>
-                  <q-item-section>
-                    <q-item-label>Delete Post</q-item-label>
-                  </q-item-section>
-                </q-item>
-                <q-item clickable @click="openDrawer(post, 'share')">
-                  <q-item-section>
-                    <q-item-label>Share Post</q-item-label>
-                  </q-item-section>
-                  <q-item-section side>
-                    <q-icon name="chevron_right" />
-                  </q-item-section>
-                </q-item>
-                <q-item clickable @click="copyLink(post.id)" v-close-popup>
-                  <q-item-section>
-                    <q-item-label>Copy Link</q-item-label>
-                  </q-item-section>
-                </q-item>
-              </q-list>
-            </q-menu>
-          </q-btn>
         </q-card-section>
         <div
           v-if="post.type !== 'text'"
@@ -113,8 +79,8 @@
             />
             <CustomVideoPlayer
               v-show="post.videoReady"
-              :src="getPostSrc(post.mediaUrl)"
               :poster="post.thumbnailUrl"
+              :src="getPostSrc(post.mediaUrl)"
               @ready="post.videoReady = true"
             />
           </div>
@@ -219,13 +185,13 @@
 
 <script setup>
 import CustomVideoPlayer from 'components/VideoPlayer.vue'
-import PostActionCounts from 'components/misc/PostActionCounts.vue'
+import PostActionCounts from 'components/misc/othrs/PostActionCounts.vue'
 import { ref, onMounted, computed, shallowRef } from 'vue'
 import { getAvatarSrc, formatTime, getPostSrc } from '../../composables/formater'
 import { api } from 'boot/axios'
-import { useQuasar } from 'quasar'
+//import { useQuasar } from 'quasar'
 
-const $q = useQuasar()
+//const $q = useQuasar()
 const initialLoading = ref(true)
 const posts = ref([])
 const cursor = ref(0)
@@ -235,8 +201,6 @@ const hasMore = ref(true)
 
 import MentionsPanel from 'components/MentionPanel.vue'
 import LinksPanel from 'components/LinksPanel.vue'
-import SharePanel from 'components/SharePanel.vue'
-import EditPanel from 'components/CreatePanel.vue'
 
 const currentPanelComponent = shallowRef(null)
 const activePost = ref(null)
@@ -246,8 +210,6 @@ const panelTitle = ref(null)
 const drawerHeightMap = {
   MentionsPanel: 'auto',
   LinksPanel: 'auto',
-  SharePanel: 'auto',
-  EditPanel: 'auto',
 }
 
 const currentDrawerHeight = computed(() => {
@@ -268,16 +230,12 @@ function openDrawer(p, t) {
     panelTitle.value = 'Links'
     currentPanelComponent.value = LinksPanel
   }
-  if (t === 'share') {
-    panelTitle.value = 'Share'
-    currentPanelComponent.value = SharePanel
-  }
-  if (t === 'edit') {
-    panelTitle.value = 'Edit Post'
-    currentPanelComponent.value = EditPanel
-  }
   activePost.value = p
 }
+
+const { user } = defineProps({
+  user: Object,
+})
 
 async function fetchPosts(isFirst = false) {
   if (
@@ -295,7 +253,7 @@ async function fetchPosts(isFirst = false) {
   }
 
   try {
-    const { data } = await api.get(`api/posts/mine/${cursor.value}/${limit.value}`)
+    const { data } = await api.get(`api/posts/${user.id}/${cursor.value}/${limit.value}`)
 
     data.posts.forEach((p) => {
       p.videoReady = false
@@ -328,90 +286,6 @@ onMounted(() => {
 defineExpose({
   fetchPosts,
 })
-
-async function copyLink(id) {
-  const shareUrl = `${process.env.VITE_API_BASE_URL}/post/${id}`
-  try {
-    await navigator.clipboard.writeText(shareUrl)
-    $q.notify({
-      message: 'Link copied to clipboard!',
-      color: 'primary',
-      icon: 'check_circle',
-      position: 'bottom',
-      timeout: 1500,
-    })
-  } catch (err) {
-    console.error(err.message)
-    $q.notify({
-      message: 'Failed to copy link.',
-      color: 'negative',
-      icon: 'error',
-      position: 'bottom',
-      timeout: 1500,
-    })
-  }
-}
-
-import { EventBus } from 'boot/event-bus'
-async function deletePost(p) {
-  const postId = p.id
-
-  $q.dialog({
-    title: 'Delete Post',
-    message: 'Are you sure you want to delete this post? <br> This action is irreversable',
-    html: true,
-    ok: 'continue',
-    cancel: true,
-  })
-    .onCancel(() => {
-      return
-    })
-    .onOk(async () => {
-      $q.loading.show({
-        delay: 400,
-        message: 'Please wait a moment...',
-        spinnerSize: 80,
-        spinnerColor: 'primary',
-        backgroundColor: 'blue-grey-10',
-        textColor: 'blue-grey-8',
-      })
-
-      await new Promise((resolve) => setTimeout(resolve, 3000))
-
-      try {
-        $q.loading.show({ message: 'Gathering post info...' })
-        await new Promise((resolve) => setTimeout(resolve, 3000))
-
-        $q.loading.show({ message: 'Deleting post and its metadatas...' })
-        await api.delete(`/api/post/${postId}/delete/`)
-
-        const postIndex = posts.value.findIndex((p) => p.id === postId)
-
-        if (postIndex !== -1) {
-          posts.value.splice(postIndex, 1)
-        }
-
-        EventBus.emit('postDeleted')
-
-        $q.notify({
-          message: `Post deleted successfully!`,
-          color: 'positive',
-          icon: 'check_circle',
-          timeout: 1500,
-        })
-      } catch (err) {
-        console.error(err.message)
-        $q.notify({
-          message: `Failed to Delete Post. ${err.message || ''}`,
-          color: 'negative',
-          icon: 'error',
-          timeout: 2500,
-        })
-      } finally {
-        $q.loading.hide()
-      }
-    })
-}
 </script>
 
 <style scoped lang="scss">

@@ -19,12 +19,18 @@
     </div>
 
     <div v-else class="row items-center justify-between no-wrap q-pa-md">
-      <div class="row items-center" @click="openDrawer('comments')">
+      <q-btn
+        :disabled="!post.allow_comments"
+        flat
+        dense
+        class="row items-center"
+        @click="openDrawer('comments')"
+      >
         <q-icon name="far fa-comment" color="grey-4" class="q-mr-sm" size="18px" />
-        <span>{{ formatCounts(commentsCount) }}</span>
-      </div>
+        <span v-if="post.allow_comments"> {{ formatCounts(commentsCount) }}</span>
+      </q-btn>
 
-      <div class="row items-center">
+      <div class="row items-center" @click="openDrawer('share')">
         <q-icon name="send" color="grey-4" class="q-mr-sm" size="18px" />
         <span>{{ formatCounts(sharesCount) }}</span>
       </div>
@@ -37,7 +43,9 @@
           size="20px"
           @click="toggleLike(post)"
         />
-        <span @click="openDrawer('likes')">{{ formatCounts(likesCount) }}</span>
+        <span v-if="post.likeCounts" @click="openDrawer('likes')">{{
+          formatCounts(likesCount)
+        }}</span>
       </div>
     </div>
     <q-dialog v-model="showDrawer" position="bottom" transition-show="slide-up">
@@ -80,6 +88,7 @@ const commentsCount = ref(0)
 
 import CommentsPanel from 'components/CommentsPanel.vue'
 import LikesPanel from 'components/LikesPanel.vue'
+import SharePanel from 'components/SharePanel.vue'
 
 const currentPanelComponent = shallowRef(null)
 const activePost = ref(null)
@@ -89,6 +98,7 @@ const panelTitle = ref(null)
 const drawerHeightMap = {
   CommentsPanel: '95vh',
   LikesPanel: '95vh',
+  Share: 'auto',
 }
 
 const currentDrawerHeight = computed(() => {
@@ -109,7 +119,13 @@ function openDrawer(t) {
     panelTitle.value = 'Likes'
     currentPanelComponent.value = LikesPanel
   }
+  if (t === 'share') {
+    panelTitle.value = 'Likes'
+    currentPanelComponent.value = SharePanel
+  }
   activePost.value = props.post
+
+  //console.log(props.post)
 }
 
 async function fetchCounts() {

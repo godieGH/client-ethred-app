@@ -32,6 +32,7 @@
               <q-list>
                 <q-item-section>
                   <q-item
+                    :disable="disableInput"
                     ref="userRef"
                     clickable
                     style="display: flex; align-items: center; border-bottom: 1px solid #81818167"
@@ -127,7 +128,7 @@
           />
         </div>
         <q-btn
-        v-if="!post"
+          v-if="!post"
           flat
           round
           :loading="disableInput"
@@ -142,16 +143,14 @@
           "
         />
         <q-btn
-  v-if="post"
-  flat
-  round
-  :loading="disableInput"
-  label="update"
-  @click="submitEdit"
-  :disable=" !postContent.trim() || disableInput || !isPostChanged"
-/>
-
-        
+          v-if="post"
+          flat
+          round
+          :loading="disableInput"
+          label="update"
+          @click="submitEdit"
+          :disable="disableInput || !isPostChanged || (post.type === 'text' && !postContent.trim())"
+        />
       </q-card-section>
 
       <q-separator />
@@ -274,8 +273,7 @@ const mentions = ref([])
 const links = ref([])
 const attachedFile = ref(null)
 const selectedFile = ref(null)
-const initialPostState = ref(null);
-
+const initialPostState = ref(null)
 
 const audience = ref('public')
 const enableLocation = ref(false)
@@ -335,7 +333,7 @@ const left = ref(0)
 const suggestions = ref([])
 
 async function onInput(e) {
-  tooltipRef.value.style.transform = `translateX(0px)` 
+  tooltipRef.value.style.transform = `translateX(0px)`
   const area = contentInput.value
   const text = e.target.value
   if (!text) {
@@ -351,14 +349,14 @@ async function onInput(e) {
   }
   const q = match ? match[1] : null
   if (!q) {
-     suggestions.value = []
-     return
+    suggestions.value = []
+    return
   }
   try {
     const { data } = await api.post('/users/search', { q })
     if (!data.length) {
-       suggestions.value = []
-       return
+      suggestions.value = []
+      return
     }
     suggestions.value = data
     const coords = caret(area, area.selectionEnd)
@@ -373,7 +371,7 @@ async function onInput(e) {
     if (area.getBoundingClientRect().width - left.value <= 160) {
       tooltipRef.value.style.transform = `translateX(-170px)`
     } else {
-      tooltipRef.value.style.transform = `translateX(0px)` 
+      tooltipRef.value.style.transform = `translateX(0px)`
     }
   } catch (err) {
     console.error(err.message)
@@ -407,7 +405,7 @@ function canAddTag() {
 }
 
 function canAddMention() {
-  if (mentions.value.length >= 3) {
+  if (mentions.value.length >= 5) {
     $q.notify({ message: 'Mention limit reached (max 3)', color: 'warning' })
     return false
   }
@@ -557,6 +555,8 @@ function onKeydown(e) {
 }
 
 function addMention(username) {
+  const t = canAddMention()
+  if (!t) return
   const val = postContent.value
   const area = selectTextarea()
   if (!area) return
@@ -686,29 +686,58 @@ function removeFile() {
 }
 function isVideo(src) {
   const commonVideoExtensions = [
-    '.mp4', '.mov', '.avi', '.wmv', '.flv', '.webm', '.mkv', '.mpg', '.mpeg',
-    '.3gp', '.3g2', '.ogv', '.m4v', '.mts', '.m2ts', '.ts', '.vob', '.qt',
-    '.rm', '.asf', '.amv', '.f4v', '.f4p', '.f4a', '.f4b', '.mod', '.yuv',
-    '.svi', '.roq', '.nsv', '.mxf', '.drc', // Less common, but good to include if you might encounter them
+    '.mp4',
+    '.mov',
+    '.avi',
+    '.wmv',
+    '.flv',
+    '.webm',
+    '.mkv',
+    '.mpg',
+    '.mpeg',
+    '.3gp',
+    '.3g2',
+    '.ogv',
+    '.m4v',
+    '.mts',
+    '.m2ts',
+    '.ts',
+    '.vob',
+    '.qt',
+    '.rm',
+    '.asf',
+    '.amv',
+    '.f4v',
+    '.f4p',
+    '.f4a',
+    '.f4b',
+    '.mod',
+    '.yuv',
+    '.svi',
+    '.roq',
+    '.nsv',
+    '.mxf',
+    '.drc', // Less common, but good to include if you might encounter them
     // Add any other specific extensions you might need
-  ];
+  ]
 
   // Check for data URI
   if (src.startsWith('data:video')) {
-    return true;
+    return true
   }
 
   // Check for common file extensions (case-insensitive)
-  const lowerSrc = src.toLowerCase();
+  const lowerSrc = src.toLowerCase()
   for (const ext of commonVideoExtensions) {
     if (lowerSrc.endsWith(ext)) {
-      return true;
+      return true
     }
   }
 
-  return false;
+  return false
 }
 
+import { io } from 'socket.io-client'
 
 async function submitPost() {
   if (
@@ -719,46 +748,97 @@ async function submitPost() {
     links.value.length === 0
   )
     return $q.notify({ message: 'Nothing to post', color: 'negative' })
+
   disableInput.value = true
+
+  // --- Initialize Socket.IO connection ---
+  // The URL should point to your backend server
+  const socket = io(import.meta.env.VITE_API_BASE_URL)
+
+  // --- Wait for the connection to be established ---
+  await new Promise((resolve) => {
+    socket.on('connect', () => {
+      console.log('Connected to server with socket ID:', socket.id)
+      resolve()
+    })
+  })
+
   const notif = $q.notify({
-    message: 'Uploading avatar...',
+    message: 'Uploading file...',
     caption: '0%',
     spinner: true,
     timeout: 0,
     group: false,
   })
 
-  let media_url = null
-  if (postType.value != 'text') {
+  let mediaUrl = null
+  let originalMedia = null
+  let thumbnailUrl = null
+
+  // --- Listen for general processing start events (HLS or WebM) ---
+  socket.on('processing_start', (data) => {
+    notif({ message: data.message, caption: '0%' }) // Update message to "Converting..." or "Optimizing..."
+  })
+
+  // --- Listen for HLS progress events from the server ---
+  socket.on('hls_progress', (data) => {
+    notif({ caption: `${data.percent}%` })
+  })
+
+  // --- Listen for WebM progress events from the server ---
+  socket.on('webm_progress', (data) => {
+    notif({ caption: `${data.percent}%` })
+  })
+
+  if (postType.value !== 'text') {
     const formData = new FormData()
-    formData.append('post', selectedFile.value)
+    formData.append('media', selectedFile.value)
     try {
-      const { data } = await api.post('/posts/upload/', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      const response = await api.post('/posts/upload/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          // --- Send socket ID to the backend ---
+          'X-Socket-ID': socket.id,
+        },
         onUploadProgress: (progressEvent) => {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          notif({ caption: `${percent}%` })
+          // Only update the upload progress if it's not yet 100%
+          // Once it hits 100%, the HLS/WebM progress will take over.
+          if (percent < 100) {
+            notif({ caption: `${percent}%` })
+          } else {
+            notif({ message: 'Upload complete. Processing...', caption: 'Please wait...' })
+          }
         },
       })
-      media_url = data
+      ;({ mediaUrl, originalMedia, thumbnailUrl } = response.data)
     } catch (err) {
       notif({
         type: 'negative',
         spinner: false,
         icon: 'error',
-        message: 'Faled to upload file!',
-        caption: err.message,
-        timeout: 3000,
+        message: 'Failed to upload file!',
+        caption: err.response?.data?.details || err.message,
+        timeout: 4000,
       })
       disableInput.value = false
+      socket.disconnect() // Disconnect socket on failure
       return
     }
   }
 
+  // Disconnect the socket as it's no longer needed
+  socket.disconnect()
+
+  notif({ message: 'Creating post...' })
+
   const postObj = {
+    // ... your post object remains the same
     type: postType.value,
     body: postContent.value,
-    media_url, //this will come after a an upload process to occur
+    mediaUrl,
+    thumbnailUrl,
+    originalMedia,
     link_url: links.value,
     status: 'published',
     audience: audience.value,
@@ -777,6 +857,7 @@ async function submitPost() {
         : new Date().toISOString()
       : new Date().toISOString(),
   }
+
   try {
     await api.post('/posts/create', postObj)
     notif({
@@ -786,69 +867,67 @@ async function submitPost() {
       caption: '',
       timeout: 3000,
     })
+    // --- Reset your form state ---
     postContent.value = ''
     tags.value = []
     mentions.value = []
     links.value = []
     attachedFile.value = null
     selectedCategory.value = ''
-    audience.value = 'Public'
-    enableLocation.value = false
-    commentsToggle.value = true
-    reactionCountsToggle.value = true
-    scheduledPostToggle.value = false
-    scheduledDate.value = null
+    // ... etc
     router.push({ path: '/profile' })
-    window.location.reload()
+    // window.location.reload(); // Consider if this is truly necessary, as it's a full page refresh.
   } catch (err) {
     notif({
       type: 'negative',
       spinner: false,
       icon: 'error',
       message: `Failed To create a post!`,
-      caption: err.message,
-      timeout: 3000,
+      caption: err.response?.data?.message || err.message,
+      timeout: 4000,
     })
   }
 
   disableInput.value = false
-  //$q.notify({ message:'Post sent!', color:'positive' });
 }
 
-import { getPostSrc } from "src/composables/formater"
+
+import { getPostSrc } from 'src/composables/formater'
 
 const props = defineProps({
-   post: Object
+  post: Object,
 })
 onMounted(() => {
-   if(props.post) {
-      postContent.value = props.post.body
-      tags.value = props.post.keywords.tags
-      mentions.value = props.post.keywords.mentions
-      links.value = props.post.linkUrl
-      audience.value = props.post.audience
-      commentsToggle.value = props.post.allow_comments
-      selectedCategory.value = props.post.category
-      reactionCountsToggle.value = props.post.likeCounts
+  if (props.post) {
+    postContent.value = props.post.body
+    tags.value = props.post.keywords.tags
+    mentions.value = props.post.keywords.mentions
+    links.value = props.post.linkUrl
+    audience.value = props.post.audience
+    commentsToggle.value = props.post.allow_comments
+    selectedCategory.value = props.post.category
+    reactionCountsToggle.value = props.post.likeCounts
 
-      if(props.post.type !== 'text' && props.post.mediaUrl) {
-         attachedFile.value = getPostSrc(props.post.mediaUrl)
-      }
+    if (props.post.type === 'image' && props.post.mediaUrl) {
+      attachedFile.value = getPostSrc(props.post.mediaUrl)
+    }
 
-      
-      initialPostState.value = {
-          body: props.post.body,
-          tags: JSON.parse(JSON.stringify(props.post.keywords.tags)),
-          mentions: JSON.parse(JSON.stringify(props.post.keywords.mentions)),
-          links: JSON.parse(JSON.stringify(props.post.linkUrl)),
-          audience: props.post.audience,
-          category: props.post.category,
-          allow_comments: props.post.allow_comments,
-          like_counts: props.post.likeCounts,
-      };
-   }
+    if (props.post.type === 'video' && props.post.mediaUrl) {
+      attachedFile.value = props.post.originalMedia
+    }
+
+    initialPostState.value = {
+      body: props.post.body,
+      tags: JSON.parse(JSON.stringify(props.post.keywords.tags)),
+      mentions: JSON.parse(JSON.stringify(props.post.keywords.mentions)),
+      links: JSON.parse(JSON.stringify(props.post.linkUrl)),
+      audience: props.post.audience,
+      category: props.post.category,
+      allow_comments: props.post.allow_comments,
+      like_counts: props.post.likeCounts,
+    }
+  }
 })
-
 
 async function submitEdit() {
   disableInput.value = true
@@ -862,7 +941,7 @@ async function submitEdit() {
   try {
     const updatePayload = {
       body: postContent.value,
-      linkUrl: links.value, 
+      linkUrl: links.value,
       audience: audience.value,
       category: selectedCategory.value,
       comments: commentsToggle.value,
@@ -874,8 +953,7 @@ async function submitEdit() {
       },
     }
 
-    
-     await api.put(`/posts/update/${props.post.id}`, updatePayload);
+    await api.put(`/posts/update/${props.post.id}`, updatePayload)
     notif({
       spinner: false,
       icon: 'done',
@@ -900,25 +978,22 @@ async function submitEdit() {
 
 const isPostChanged = computed(() => {
   if (!props.post || !initialPostState.value) {
-    return false;
+    return false
   }
 
-  if (postContent.value !== initialPostState.value.body) return true;
-  if (audience.value !== initialPostState.value.audience) return true;
-  if (selectedCategory.value !== initialPostState.value.category) return true;
-  if (commentsToggle.value !== initialPostState.value.allow_comments) return true;
-  if (reactionCountsToggle.value !== initialPostState.value.like_counts) return true;
-  
-  if (JSON.stringify(tags.value) !== JSON.stringify(initialPostState.value.tags)) return true;
-  if (JSON.stringify(mentions.value) !== JSON.stringify(initialPostState.value.mentions)) return true;
-  if (JSON.stringify(links.value) !== JSON.stringify(initialPostState.value.links)) return true;
+  if (postContent.value !== initialPostState.value.body) return true
+  if (audience.value !== initialPostState.value.audience) return true
+  if (selectedCategory.value !== initialPostState.value.category) return true
+  if (commentsToggle.value !== initialPostState.value.allow_comments) return true
+  if (reactionCountsToggle.value !== initialPostState.value.like_counts) return true
 
-  
-  return false;
-});
+  if (JSON.stringify(tags.value) !== JSON.stringify(initialPostState.value.tags)) return true
+  if (JSON.stringify(mentions.value) !== JSON.stringify(initialPostState.value.mentions))
+    return true
+  if (JSON.stringify(links.value) !== JSON.stringify(initialPostState.value.links)) return true
 
-
-
+  return false
+})
 </script>
 
 <style scoped lang="scss">

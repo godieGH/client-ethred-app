@@ -26,7 +26,7 @@ export function getAvatarSrc(src) {
 }
 
 export function getPostSrc(src) {
-  return `uploads/posts/${src}`
+  return src
 }
 
 export function formatCounts(n) {

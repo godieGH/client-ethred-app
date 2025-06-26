@@ -1,7 +1,12 @@
 <template>
   <q-page style="overflow-y: scroll; height: 90vh">
     <div class="row" style="overflow-y: hidden; height: 100%">
-      <div @scroll="fetchMorePost" class="col-12 col-md-6" style="overflow-y: auto; height: 100vh; padding-bottom: 70px">
+      <div
+        id="postsScrollArea"
+        @scroll="fetchMorePost"
+        class="col-12 col-md-6"
+        style="overflow-y: auto; height: 100vh; padding-bottom: 70px"
+      >
         <div>
           <div v-if="loading" class="q-px-lg">
             <q-card v-for="n in 5" :key="n" flat bordered style="margin: 10px 0">
@@ -57,178 +62,208 @@
             </q-card>
           </div>
           <div v-else class="q-px-lg">
-            <q-card v-for="post in posts" :key="post.id" flat bordered style="margin: 10px 0">
-              <q-item>
-                <q-item-section avatar>
-                  <q-avatar @click="openMeta(post, 'profile-preview')">
-                    <img :src="getAvatarSrc(post.user.avatar)" />
-                  </q-avatar>
-                </q-item-section>
+            <q-virtual-scroll
+              scroll-target="#postsScrollArea"
+              :items="posts"
+              v-slot="{ item: post }"
+              virtual-scroll-item-size="300"
+            >
+              <q-card :key="post.id" flat bordered style="margin: 10px 0">
+                <q-item>
+                  <q-item-section avatar>
+                    <q-avatar @click="openMeta(post, 'profile-preview')">
+                      <img :src="getAvatarSrc(post.user.avatar)" />
+                    </q-avatar>
+                  </q-item-section>
 
-                <q-item-section>
-                  <q-item-label style="padding: 0 0 0 8px; margin: 0">
-                    <span class="text-grey">@{{ post.user.username }}</span>
-                    <span v-if="post.user.id !== userStore.user.id"> • </span>
-                    <button
-                      v-if="post.user.id !== userStore.user.id"
-                      @click="toggleFollow(post.user.id, post.user.isFollowing)"
-                      style="border: none; background: none"
-                      class="follow-btn-fy text-green"
-                    >
-                      {{ post.user.isFollowing ? 'Following' : 'Follow' }}
-                    </button>
-                  </q-item-label>
-
-                  <span style="padding: 0 0 0 8px; font-size: 10px" class="text-grey"
-                    >{{ formatTime(post.createdAt) }}
-                    <span>
-                      <span
-                        v-if="post.audience === 'public' || post.audience === 'friends'"
-                        style="padding: 0 4px"
-                        >•</span
+                  <q-item-section>
+                    <q-item-label style="padding: 0 0 0 8px; margin: 0">
+                      <span class="text-grey">@{{ post.user.username }}</span>
+                      <span v-if="post.user.id !== userStore.user.id"> • </span>
+                      <button
+                        v-if="post.user.id !== userStore.user.id"
+                        @click="toggleFollow(post.user.id, post.user.isFollowing)"
+                        style="border: none; background: none"
+                        class="follow-btn-fy text-green"
                       >
-                      <i v-if="post.audience == 'public'" class="material-icons">public</i>
-                      <i v-else-if="post.audience == 'friends'" class="material-icons">people</i>
-                      <i v-else class=""></i>
+                        {{ post.user.isFollowing ? 'Following' : 'Follow' }}
+                      </button>
+                    </q-item-label>
+
+                    <span style="padding: 0 0 0 8px; font-size: 10px" class="text-grey"
+                      >{{ formatTime(post.createdAt) }}
+                      <span>
+                        <span
+                          v-if="post.audience === 'public' || post.audience === 'friends'"
+                          style="padding: 0 4px"
+                          >•</span
+                        >
+                        <i v-if="post.audience == 'public'" class="material-icons">public</i>
+                        <i v-else-if="post.audience == 'friends'" class="material-icons">people</i>
+                        <i v-else class=""></i>
+                      </span>
                     </span>
-                  </span>
-                </q-item-section>
-              </q-item>
+                  </q-item-section>
+                </q-item>
 
-              <q-item>
-                <q-item-section avatar />
+                <q-item>
+                  <q-item-section avatar />
 
-                <q-item-section class="q-pl-sm">
-                  <div v-if="post.type === 'image' || post.type === 'video'" class="q-mb-sm">
-                    <div v-if="post.type === 'video'" class="q-video">
-                      <q-skeleton
-                        v-if="!post.videoReady"
-                        type="rect"
-                        :aspect-ratio="9 / 16"
-                        width="100%"
-                        height="400px"
-                        class="skeleton-overlay"
-                      />
-                      <CustomVideoPlayer
-                        v-show="post.videoReady"
-                        :src="`uploads/posts/${post.mediaUrl}`"
-                        @ready="post.videoReady = true"
-                      />
+                  <q-item-section class="q-pl-sm">
+                    <div v-if="post.type === 'image' || post.type === 'video'" class="q-mb-sm">
+                      <div v-if="post.type === 'video'" class="q-video">
+                        <q-skeleton
+                          v-show="!post.videoReady"
+                          type="rect"
+                          :aspect-ratio="9 / 16"
+                          width="100%"
+                          height="400px"
+                          class="skeleton-overlay"
+                        />
+                        <CustomVideoPlayer
+                          v-show="post.videoReady"
+                          :src="post.mediaUrl"
+                          :poster="post.thumbnailUrl"
+                          @ready="post.videoReady = true"
+                        />
+                      </div>
+
+                      <div
+                        v-if="post.type === 'image'"
+                        class="image-container"
+                        @click="handleImageTap(post, $event)"
+                      >
+                        <img :src="post.mediaUrl" style="width: 100%; border-radius: 8px" />
+                        <transition name="fade-scale">
+                          <img
+                            v-if="post.showLikeAnimation"
+                            src="~assets/anim_heart_2.gif"
+                            class="like-animation-heart"
+                            :style="{ top: post.animY + 'px', left: post.animX + 'px' }"
+                            @load="onGifLoad(post)"
+                          />
+                        </transition>
+                      </div>
                     </div>
 
-                    <img
-                      v-if="post.type === 'image'"
-                      :src="`uploads/posts/${post.mediaUrl}`"
-                      style="width: 100%; border-radius: 8px"
-                    />
-                  </div>
+                    <div class="row items-center justify-between no-wrap">
+                      <div class="row items-center">
+                        <div
+                          style="padding: 0; margin: 0; cursor: pointer"
+                          @click="post.comments ? openMeta(post, 'comments') : null"
+                        >
+                          <q-icon
+                            name="far fa-comment"
+                            color="grey-4"
+                            class="q-mr-sm"
+                            size="18px"
+                          />
 
-                  <div class="row items-center justify-between no-wrap">
-                    <div class="row items-center">
+                          <span v-if="post.comments" style="font-size: 12px">{{
+                            formatPostCounts(post.commentCounts)
+                          }}</span>
+                        </div>
+                      </div>
+
                       <div
-                        style="padding: 0; margin: 0; cursor: pointer"
-                        @click="post.comments ? openMeta(post, 'comments') : null"
+                        class="row items-center"
+                        style="cursor: pointer"
+                        @click="openMeta(post, 'share')"
                       >
-                        <q-icon name="far fa-comment" color="grey-4" class="q-mr-sm" size="18px" />
-
-                        <span v-if="post.comments" style="font-size: 12px">{{
-                          formatPostCounts(post.commentCounts)
+                        <q-icon name="send" color="grey-4" class="q-mr-sm" size="18px" />
+                        <span style="font-size: 12px">{{
+                          formatPostCounts(post.shareCounts)
                         }}</span>
                       </div>
-                    </div>
 
-                    <div
-                      class="row items-center"
-                      style="cursor: pointer"
-                      @click="openMeta(post, 'share')"
-                    >
-                      <q-icon name="send" color="grey-4" class="q-mr-sm" size="18px" />
-                      <span style="font-size: 12px">{{ formatPostCounts(post.shareCounts) }}</span>
-                    </div>
-
-                    <div class="row items-center" style="cursor: pointer">
-                      <q-icon
-                        :name="post.likedByMe ? 'favorite' : 'favorite_border'"
-                        :color="post.likedByMe ? 'red' : 'grey-4'"
-                        class="q-mr-sm like-btn"
-                        size="20px"
-                        @click="toggleLike(post)"
-                      />
-                      <span
-                        v-if="post.likeCounts"
-                        @click="openMeta(post, 'likes')"
-                        style="font-size: 12px"
-                        >{{ formatPostCounts(post.likes) }}</span
-                      >
-                    </div>
-                  </div>
-
-                  <q-card-section class="q-pa-sm">
-                    <div
-                      class="post-body"
-                      :class="{ collapsed: !post.showMore }"
-                      style="font-size: 12px; transform: translateX(-7px); border-left: 3px solid grey; padding: 0 0 0 4px;"
-                    >
-                      {{ post.body }}
-                    </div>
-                    <div v-if="post.body.split('\n').length > 4 || post.body.length > 200">
-                      <button class="show-more-btn" @click="toggleShow(post)">
-                        {{ post.showMore ? 'less' : 'more' }}
-                      </button>
-                    </div>
-                    <div style="margin-top: 4px">
-                      <LikersStackAvatar
-                        :post_id="post.id"
-                        @click="openMeta(post, 'followed-by-me-who-liked-post')"
-                      />
-
-                      <div class="row" style="padding: 3px 0">
-                        <q-chip
-                          v-for="link in post.linkUrl"
-                          :key="link.url"
-                          tag="a"
-                          :href="link.url"
-                          clickable
-                          dense
-                          style="font-size: 10px; padding: 8px; margin: 0; overflow: hidden;"
-                          outline
-                          class="text-green"
-                          icon="link"
-                          @click="openMeta(post, 'links')"
+                      <div class="row items-center" style="cursor: pointer">
+                        <q-icon
+                          :name="post.likedByMe ? 'favorite' : 'favorite_border'"
+                          :color="post.likedByMe ? 'red' : 'grey-4'"
+                          class="q-mr-sm like-btn"
+                          size="20px"
+                          @click="toggleLike(post)"
+                        />
+                        <span
+                          v-if="post.likeCounts"
+                          @click="openMeta(post, 'likes')"
+                          style="font-size: 12px"
+                          >{{ formatPostCounts(post.likes) }}</span
                         >
-                          {{ link.name }}
-                        </q-chip>
-                        <q-chip
-                          v-for="mention in post.keywords.mentions"
-                          :key="mention"
-                          clickable
-                          style="
-                            font-size: 10px;
-                            padding: 3px 4px;
-                            margin: 0;
-                            border: 1px solid #dddddd67; overflow: hidden;
-                          "
-                          @click="openMeta(post, 'mention')"
-                        >
-                          <i class="material-icons" style="padding-right: 5px; font-size: 12px"
-                            >account_circle</i
-                          >
-                          {{ mention }}
-                        </q-chip>
                       </div>
-                      <span class="text-grey tags" style="font-size: 12px">
-                        <span v-for="tag in post.keywords.tags" :key="tag"> #{{ tag }} </span>
-                      </span>
                     </div>
-                  </q-card-section>
-                </q-item-section>
-              </q-item>
-            </q-card>
-             
-             
+
+                    <q-card-section class="q-pa-sm">
+                      <div
+                        class="post-body"
+                        :class="{ collapsed: !post.showMore }"
+                        style="
+                          font-size: 12px;
+                          transform: translateX(-7px);
+                          border-left: 3px solid grey;
+                          padding: 0 0 0 4px;
+                        "
+                      >
+                        {{ post.body }}
+                      </div>
+                      <div v-if="post.body.split('\n').length > 4 || post.body.length > 200">
+                        <button class="show-more-btn" @click="toggleShow(post)">
+                          {{ post.showMore ? 'less' : 'more' }}
+                        </button>
+                      </div>
+                      <div style="margin-top: 4px">
+                        <LikersStackAvatar
+                          :post_id="post.id"
+                          @click="openMeta(post, 'followed-by-me-who-liked-post')"
+                        />
+
+                        <div class="row" style="padding: 3px 0">
+                          <q-chip
+                            v-for="link in post.linkUrl"
+                            :key="link.url"
+                            tag="a"
+                            :href="link.url"
+                            clickable
+                            dense
+                            style="font-size: 10px; padding: 8px; margin: 0; overflow: hidden"
+                            outline
+                            class="text-green"
+                            icon="link"
+                            @click="openMeta(post, 'links')"
+                          >
+                            {{ link.name }}
+                          </q-chip>
+                          <q-chip
+                            v-for="mention in post.keywords.mentions"
+                            :key="mention"
+                            clickable
+                            style="
+                              font-size: 10px;
+                              padding: 3px 4px;
+                              margin: 0;
+                              border: 1px solid #dddddd67;
+                              overflow: hidden;
+                            "
+                            @click="openMeta(post, 'mention')"
+                          >
+                            <i class="material-icons" style="padding-right: 5px; font-size: 12px"
+                              >account_circle</i
+                            >
+                            {{ mention }}
+                          </q-chip>
+                        </div>
+                        <span class="text-grey tags" style="font-size: 12px">
+                          <span v-for="tag in post.keywords.tags" :key="tag"> #{{ tag }} </span>
+                        </span>
+                      </div>
+                    </q-card-section>
+                  </q-item-section>
+                </q-item>
+              </q-card>
+            </q-virtual-scroll>
             <div v-if="loadingMorePosts" class="flex justify-center q-my-md">
-               <q-spinner-dots size="24px" />
-             </div>
+              <q-spinner-dots size="24px" />
+            </div>
           </div>
         </div>
       </div>
@@ -240,8 +275,11 @@
       >
         <template v-if="activePost">
           <!-- Dynamically choose which component to render -->
-          <component :is="currentPanelComponent" :post="activePost" :key="activePost.id + activeView" />
-
+          <component
+            :is="currentPanelComponent"
+            :post="activePost"
+            :key="activePost.id + activeView"
+          />
         </template>
         <template v-else>
           <SidePanelDefault />
@@ -272,8 +310,11 @@
 
           <!-- BODY: only this scrolls -->
           <div style="flex: 1 1 auto; overflow-y: auto; padding: 8px">
-            <component :is="currentPanelComponent" :post="activePost" :key="activePost.id + activeView" />
-
+            <component
+              :is="currentPanelComponent"
+              :post="activePost"
+              :key="activePost.id + activeView"
+            />
           </div>
         </q-card>
       </q-dialog>
@@ -314,6 +355,9 @@ const activePost = ref(null)
 const activeView = ref(null)
 const showDrawer = ref(false)
 const showMaximized = ref(false)
+
+let lastTap = 0
+const DBL_TAP_THRESHOLD = 300
 
 // Map view names to components
 const panelMap = {
@@ -402,40 +446,47 @@ const limit = ref(10)
 const hasMore = ref(true)
 
 async function fetchPosts(isFirst = false) {
-      if ((isFirst && loading.value === false) || (!isFirst && loadingMorePosts.value) || !hasMore.value) {
-        return;
-      }
+  if (
+    (isFirst && loading.value === false) ||
+    (!isFirst && loadingMorePosts.value) ||
+    !hasMore.value
+  ) {
+    return
+  }
 
-      if (isFirst) {
-          loading.value = true
-      } else {
-          loadingMorePosts.value = true
-     }
-      try {
-        const { data } = await getPosts(cursor.value, limit.value);
-        
-        const newPosts = data.posts.map((p) => ({
-            ...p,
-            showMore: false,
-            videoReady: false,
-         }))
-        
-        // Append new posts to existing ones
-        posts.value.push(...newPosts);
-         if (data.nextCursor == null) {
-           hasMore.value = false
-          } else {
-            cursor.value = data.nextCursor
-          }
-          
-      } catch (err) {
-        console.error('Error fetching posts:', err.message);
-      } finally {
-        if (isFirst) loading.value = false
-          else loadingMorePosts.value = false
-      }
+  if (isFirst) {
+    loading.value = true
+  } else {
+    loadingMorePosts.value = true
+  }
+  try {
+    const { data } = await getPosts(cursor.value, limit.value)
+
+    const newPosts = data.posts.map((p) => ({
+      ...p,
+      showMore: false,
+      videoReady: false,
+      showLikeAnimation: false,
+      animX: 0,
+      animY: 0,
+    }))
+
+    // Append new posts to existing ones
+    posts.value.push(...newPosts)
+    if (data.nextCursor == null) {
+      hasMore.value = false
+    } else {
+      cursor.value = data.nextCursor
     }
 
+    //console.log(posts.value)
+  } catch (err) {
+    console.error('Error fetching posts:', err.message)
+  } finally {
+    if (isFirst) loading.value = false
+    else loadingMorePosts.value = false
+  }
+}
 
 onMounted(async () => {
   EventBus.on('successfullyShared', bumpShareCount)
@@ -532,17 +583,50 @@ onBeforeUnmount(() => {
   EventBus.off('updateFollowBtnState')
 })
 
-
 async function onNearBottom(e) {
   const el = e.target
   const dist = el.scrollHeight - (el.scrollTop + el.clientHeight)
   if (dist <= 300) {
-   fetchPosts()
+    fetchPosts()
   }
 }
 const fetchMorePost = throttle(onNearBottom, 50)
 
+function handleImageTap(post, event) {
+  const now = Date.now()
+  if (now - lastTap < DBL_TAP_THRESHOLD) {
+    // Double tap detected
+    if (!post.likedByMe) {
+      // Only trigger if it's going to be liked (not unliked)
+      const imageRect = event.currentTarget.getBoundingClientRect()
+      post.animX = event.clientX - imageRect.left - 50 // Adjust -50 to center the GIF
+      post.animY = event.clientY - imageRect.top - 50 // Adjust -50 to center the GIF
 
+      post.showLikeAnimation = true
+      // The toggleLike will be awaited implicitly if it's an async function.
+      // However, we initiate the animation here immediately for responsiveness.
+      toggleLike(post)
+    } else {
+      // If double-tapping an already liked image unlikes it,
+      // you might not want the animation. Or you could show a different one.
+      toggleLike(post) // Still toggle like
+    }
+    lastTap = 0 // Reset last tap
+  } else {
+    lastTap = now
+  }
+}
+
+// Function to hide the GIF after it finishes playing
+function onGifLoad(post) {
+  // Assuming the GIF animation duration is around 1 second (1000ms)
+  // Adjust this timeout based on the actual duration of your GIF.
+  setTimeout(() => {
+    post.showLikeAnimation = false
+    post.animX = 0 // Reset position
+    post.animY = 0
+  }, 300) // Hide after 1 second (adjust as needed)
+}
 </script>
 
 <style scoped lang="scss">
@@ -617,5 +701,45 @@ const fetchMorePost = throttle(onNearBottom, 50)
   &:active {
     transform: scale(0.2);
   }
+}
+
+.image-container {
+  position: relative; /* Crucial for absolute positioning of the heart */
+  display: inline-block; /* Helps prevent extra space below image if needed */
+  overflow: hidden; /* Ensures heart doesn't spill out if it scales too big */
+  border-radius: 8px; /* Match your image border-radius */
+}
+
+.like-animation-heart {
+  position: absolute;
+  width: 100px; /* Adjust size of your GIF */
+  height: 100px; /* Adjust size of your GIF */
+  pointer-events: none; /* Allows clicks to pass through to the image */
+  transform: translate(-50%, -50%); /* Centers the GIF relative to its own dimensions */
+  /* Initial state for transition */
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity 0.3s ease-out,
+    transform 0.3s ease-out; /* Smooth transition */
+}
+
+/* Transition classes for Vue's <transition> component */
+.fade-scale-enter-active {
+  transition: all 0.3s ease-out; /* How it appears */
+}
+.fade-scale-leave-active {
+  transition: all 1.5s cubic-bezier(1, 0.5, 0.8, 1); /* How it disappears */
+}
+
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.fade-scale-enter-to {
+  opacity: 1;
+  transform: scale(1.2); /* Slightly larger when it appears */
 }
 </style>

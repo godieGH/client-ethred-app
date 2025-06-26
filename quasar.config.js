@@ -96,8 +96,8 @@ export default defineConfig((ctx) => {
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#devserver
     devServer: {
       port: 8080,
-      // https: true,
-      open: false, // opens browser window automatically
+      https: false,
+      //open: true, // opens browser window automatically
 
       proxy: {
         '/uploads': {

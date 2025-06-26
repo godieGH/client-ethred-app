@@ -1,56 +1,47 @@
 <template>
   <q-page padding class="flex justify-center">
-    <!-- CENTERING CONTAINER -->
     <div class="list-wrapper">
-      <q-toolbar class="q-mb-md">
+      <q-toolbar class="q-mb-sm">
         <q-toolbar-title class="text-h6">Discover Creators</q-toolbar-title>
-        <q-btn flat round icon="refresh" aria-label="Refresh" @click="refresh" />
       </q-toolbar>
 
-      <!-- LOADING SKELETON IN VIRTUAL-SCROLL -->
-      <q-virtual-scroll
-        v-if="store.loading"
-        :items="skeletonItems"
-        :item-size="72"
-        class="people-list"
-        :virtual-scroll-target="$q.screen.gt.xs ? null : 'window'"
-      >
-        <template #default>
-          <q-item class="q-py-sm flex items-center" style="height: 72px">
-            <q-item-section avatar>
-              <q-skeleton type="circle" width="40px" height="40px" />
-            </q-item-section>
-            <q-item-section class="q-pl-md" style="flex: 1">
-              <q-skeleton type="text" width="30%" />
-              <q-skeleton type="text" width="50%" class="q-mt-xs" />
-            </q-item-section>
-            <q-item-section side>
-              <q-skeleton type="rect" width="70px" height="28px" />
-            </q-item-section>
-          </q-item>
-        </template>
-      </q-virtual-scroll>
+      <div v-if="initialLoading" class="people-list-container">
+        <div
+          v-for="n in 10"
+          :key="n"
+          class="q-py-sm q-px-md flex items-center"
+          style="height: 72px"
+        >
+          <q-item-section avatar>
+            <q-skeleton type="circle" width="40px" height="40px" />
+          </q-item-section>
+          <q-item-section class="q-pl-md" style="flex: 1">
+            <q-skeleton type="text" width="30%" />
+            <q-skeleton type="text" width="50%" class="q-mt-xs" />
+          </q-item-section>
+          <q-item-section side>
+            <q-skeleton type="rect" width="70px" height="28px" />
+          </q-item-section>
+        </div>
+      </div>
 
-      <!-- ERROR STATE -->
-      <div v-else-if="store.error" class="text-red text-center q-my-xl">
+      <div v-else-if="error && !people.length" class="text-red text-center q-my-xl">
         Failed to load users.
         <q-btn flat label="Retry" @click="refresh" />
       </div>
 
-      <!-- REAL DATA -->
-      <q-virtual-scroll
-        v-else
-        :items="store.people"
-        :item-size="72"
-        class="people-list"
-        :virtual-scroll-target="$q.screen.gt.xs ? null : 'window'"
-      >
-        <template #default="{ item: user }">
-          <q-item
-            clickable
-            @click="PreviewUser(user.id)"
-            class="q-py-sm flex items-center"
+      <div v-else id="peopleListScrollArea" class="people-list-container" @scroll="handleScroll">
+        <q-virtual-scroll
+          scroll-target="#peopleListScrollArea"
+          :items="people"
+          v-slot="{ item: user }"
+          virtual-scroll-item-size="72"
+        >
+          <div
+            :key="user.id"
+            class="q-item clickable q-py-sm flex items-center"
             style="height: 72px"
+            @click="PreviewUser(user.id)"
           >
             <q-item-section avatar>
               <q-avatar>
@@ -60,7 +51,8 @@
             <q-item-section class="q-pl-md" style="flex: 1">
               <q-item-label>{{ user.name }} </q-item-label>
               <q-item-label caption class="bio-text">
-                @{{ user.username }} • <span class="text-green">{{ user.bio || defaultBio }}</span>
+                <span class="text-grey">@{{ user.username }}</span> •
+                <span class="text-green">{{ user.bio || defaultBio }}</span>
               </q-item-label>
             </q-item-section>
             <q-item-section side>
@@ -73,9 +65,20 @@
                 @click.stop="toggleFollow(user)"
               />
             </q-item-section>
-          </q-item>
-        </template>
-      </q-virtual-scroll>
+          </div>
+        </q-virtual-scroll>
+
+        <div v-if="loadingMore" class="text-center q-py-md">
+          <q-spinner-dots color="primary" size="40px" />
+        </div>
+        <div v-else-if="!pagination.hasMore && people.length" class="text-center text-grey q-py-md">
+          No more creators to load.
+        </div>
+        <div v-if="error && people.length && !loadingMore" class="text-red text-center q-my-sm">
+          Failed to load more users.
+          <q-btn flat label="Retry" @click="fetchPeople(false)" />
+        </div>
+      </div>
     </div>
 
     <q-dialog
@@ -91,7 +94,6 @@
           <span style="margin-left: 8px">Profile</span>
         </div>
         <div>
-          <!-- 🔥 Here’s the fix: -->
           <ProfilePreview :post="{ user: { id: activeUserId } }" />
         </div>
       </q-card>
@@ -100,22 +102,104 @@
 </template>
 
 <script setup>
-import { ref, onMounted, reactive, computed } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import ProfilePreview from 'components/ProfilePreview.vue'
-import { usePeopleStore } from 'stores/peopleStore'
+import { getUsers, followUser, unfollowUser } from 'src/api/people'
+import { useQuasar, throttle } from 'quasar'
 
-const store = usePeopleStore()
+const $q = useQuasar()
+const people = ref([])
+const initialLoading = ref(true) // For first fetch loading state
+const loadingMore = ref(false) // For subsequent fetches (scrolling)
+const error = ref(null)
+
 const actionInProgress = reactive({})
 
 const activeUserId = ref(null)
 const showDrawer = ref(false)
 
 const defaultBio = 'Hey there, I’m using Ethred…'
-// array of 5 placeholders for skeleton
-const skeletonItems = computed(() => Array(10).fill(null))
 
-function refresh() {
-  store.fetchAll()
+const pagination = reactive({
+  limit: 20,
+  cursor: null,
+  hasMore: true,
+})
+
+// Renamed from fetchUsers to fetchPeople for clarity and consistency with the example
+async function fetchPeople(isInitialLoad = false) {
+  // Guard against concurrent fetches or no more data
+  if (
+    (isInitialLoad && initialLoading.value === false && people.value.length > 0) || // Already loaded initial data
+    (!isInitialLoad && loadingMore.value) || // Already loading more
+    (!isInitialLoad && !pagination.hasMore) // No more data to load (for loadMore calls)
+  ) {
+    return
+  }
+
+  error.value = null // Clear previous errors
+
+  if (isInitialLoad) {
+    initialLoading.value = true
+    people.value = [] // Clear current data for a fresh load
+    pagination.cursor = null // Reset cursor for fresh load
+    pagination.hasMore = true // Assume more data for a fresh load
+  } else {
+    loadingMore.value = true // Set loading state for "load more"
+  }
+
+  try {
+    const { data, nextCursor, hasMore } = await getUsers(pagination.limit, pagination.cursor)
+
+    // Append new data to existing list
+    people.value.push(...data)
+
+    pagination.cursor = nextCursor // Update cursor
+    pagination.hasMore = hasMore // Update hasMore based on backend response
+  } catch (err) {
+    console.error('Error fetching people:', err)
+    error.value = err
+    $q.notify({
+      color: 'negative',
+      message: isInitialLoad ? 'Failed to load creators.' : 'Failed to load more creators.',
+      icon: 'report_problem',
+      position: 'top',
+      timeout: 3000,
+    })
+  } finally {
+    // Reset loading states in finally block
+    if (isInitialLoad) {
+      initialLoading.value = false
+    } else {
+      loadingMore.value = false
+    }
+  }
+}
+
+async function follow(id) {
+  const user = people.value.find((u) => u.id === id)
+  if (!user) return
+
+  user.isFollowing = true
+  try {
+    await followUser(id)
+  } catch (err) {
+    user.isFollowing = false
+    console.error('Error following user:', err)
+  }
+}
+
+async function unfollow(id) {
+  const user = people.value.find((u) => u.id === id)
+  if (!user) return
+
+  user.isFollowing = false
+  try {
+    await unfollowUser(id)
+  } catch (err) {
+    user.isFollowing = true
+    console.error('Error unfollowing user:', err)
+  }
 }
 
 function avatarSrc(filename) {
@@ -123,46 +207,59 @@ function avatarSrc(filename) {
 }
 
 async function toggleFollow(user) {
+  if (actionInProgress[user.id]) return
+
   actionInProgress[user.id] = true
   try {
-    if (user.isFollowing) await store.unfollow(user.id)
-    else await store.follow(user.id)
+    if (user.isFollowing) await unfollow(user.id)
+    else await follow(user.id)
   } finally {
-    actionInProgress[user.id] = false
+    delete actionInProgress[user.id]
   }
 }
-
-onMounted(() => {
-  if (!store.people.length) store.fetchAll()
-})
 
 function PreviewUser(id) {
   activeUserId.value = id
   showDrawer.value = true
 }
+
+// Throttled scroll handler, simplified.
+const handleScroll = throttle((event) => {
+  const { scrollTop, scrollHeight, clientHeight } = event.target
+  const distanceToBottom = scrollHeight - scrollTop - clientHeight
+
+  // Only attempt to fetch if there's potentially more data and we're not currently loading more.
+  if (distanceToBottom < 300 && pagination.hasMore && !loadingMore.value) {
+    fetchPeople(false) // Request to load more data
+  }
+}, 200) // Increased throttle delay slightly to 200ms
+
+onMounted(() => {
+  fetchPeople(true) // Initial load
+})
 </script>
 
 <style scoped>
-/* 1) Make the page a flex container and center its child horizontally */
 .q-page.flex {
   display: flex;
   justify-content: center;
 }
 
-/* 2) Wrapper: full-width up to a max, centered via margin auto */
 .list-wrapper {
   width: 100%;
-  max-width: 700px; /* or whatever max you like */
+  max-width: 700px;
   margin: 0 auto;
-  padding: 0; /* small gutter on very narrow viewports */
+  padding: 0;
 }
 
-/* 3) Virtual-scroll list height adjustment */
-.people-list {
-  height: calc(100vh - 160px);
+.people-list-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: calc(100vh - 160px);
+  min-height: 200px;
+  border-radius: 8px;
 }
 
-/* 4) One-line bio with ellipsis */
 .bio-text {
   display: -webkit-box;
   -webkit-line-clamp: 1;
@@ -171,8 +268,7 @@ function PreviewUser(id) {
   text-overflow: ellipsis;
 }
 
-/* 5) Ensure each item stays 72px tall and centered vertically */
-.people-list .q-item {
+.q-item {
   height: 72px;
   display: flex;
   align-items: center;

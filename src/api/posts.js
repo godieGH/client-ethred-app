@@ -6,7 +6,7 @@ export async function getPosts(cursor, limit) {
   return await api.get(`/api/feeds/fetch-feeds`, {
     params: {
       cursor: cursor,
-      limit: limit
-    }
-  });
+      limit: limit,
+    },
+  })
 }

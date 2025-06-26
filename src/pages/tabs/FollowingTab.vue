@@ -111,6 +111,7 @@ async function fetchFollowing(isFirst = false) {
       cursor.value = data.nextCursor
     }
   } finally {
+    //console.log(followingList.value)
     if (isFirst) initialLoading.value = false
     else loadingMore.value = false
   }
