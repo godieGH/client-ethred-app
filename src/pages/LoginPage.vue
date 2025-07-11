@@ -100,7 +100,6 @@ import GoogleLoginBtn from 'components/GoogleLoginBtn.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { api } from 'boot/axios'
-const baseUrl = import.meta.env.VITE_API_BASE_URL
 
 const userStore = useUserStore()
 const router = useRouter()
@@ -127,7 +126,7 @@ const submitForm = async () => {
     btnColor.value = 'secondary'
 
     try {
-      const res = await api.post(`${baseUrl}/users/login`, credentials.value)
+      const res = await api.post(`/users/login`, credentials.value)
       if (res.status === 200) {
         userStore.setUser(res.data.user, res.data.accessToken)
         if (userStore.isLoggedIn) {

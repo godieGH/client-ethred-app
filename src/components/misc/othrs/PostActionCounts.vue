@@ -174,6 +174,10 @@ async function toggleLike(post) {
     console.error(err.message)
   }
 }
+
+defineExpose({
+  toggleLike,
+})
 </script>
 
 <style scoped>

@@ -336,6 +336,7 @@ async function toggleLike(commentId) {
 }
 .comment-proto .body {
   grid-area: body;
+  white-space: pre-wrap;
 }
 .comment-proto .actions {
   grid-area: actions;

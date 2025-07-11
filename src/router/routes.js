@@ -75,13 +75,6 @@ const routes = [
     ],
   },
   {
-    path: '/ex',
-    name: 'ex',
-    component: () => import('pages/exaMple.vue'),
-  },
-  // Always leave this as last one,
-  // but you can also remove it
-  {
     path: '/:catchAll(.*)*',
     redirect: () => ({ name: 'error-page', params: { status: '404' } }),
   },

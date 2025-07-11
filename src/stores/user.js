@@ -46,7 +46,7 @@ export const useUserStore = defineStore('user', {
     async clearUser() {
       try {
         const res = await api.post('/users/logout', this.user)
-        console.log(res.data.message)
+        console.log(res.data.message, "done")
         this.user = null
         this.token = null
         LocalStorage.clear()

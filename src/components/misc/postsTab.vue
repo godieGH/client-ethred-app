@@ -2,16 +2,13 @@
   <div>
     <div v-if="initialLoading">
       <q-card class="q-mb-md" flat bordered v-for="n in 7" :key="n">
-        <!-- Header: Avatar and Username -->
         <q-card-section class="row items-center">
           <q-skeleton type="circle" size="40px" />
           <q-skeleton type="text" width="120px" class="q-ml-sm" />
         </q-card-section>
 
-        <!-- Image Placeholder -->
         <q-skeleton type="rect" height="300px" style="border-radius: 8px" class="q-mt-sm q-mx-md" />
 
-        <!-- Action Buttons -->
         <div class="row items-center justify-between no-wrap q-pa-md">
           <div class="row items-center">
             <q-icon name="far fa-comment" color="grey-4" class="q-mr-sm" size="18px" />
@@ -29,7 +26,6 @@
           </div>
         </div>
 
-        <!-- Caption -->
         <q-card-section>
           <q-skeleton type="text" width="80%" />
           <q-skeleton type="text" width="60%" class="q-mt-xs" />
@@ -39,7 +35,6 @@
 
     <div v-else>
       <q-card class="q-mb-md" flat bordered v-for="post in posts" :key="post.id">
-        <!-- Header: Avatar and Username -->
         <q-card-section class="row items-center">
           <q-avatar size="40px">
             <img :src="getAvatarSrc(post.user.avatar)" />
@@ -68,7 +63,11 @@
           class="q-py-md"
           :class="$q.screen.width > 800 ? 'q-px-xl' : 'q-px-lg q-py-md'"
         >
-          <div v-if="post.type === 'video'" class="q-video">
+          <div
+            @click="handlePostDoubleTap(post, $event)"
+            v-if="post.type === 'video'"
+            class="q-video"
+          >
             <q-skeleton
               v-if="!post.videoReady"
               type="rect"
@@ -83,18 +82,38 @@
               :src="getPostSrc(post.mediaUrl)"
               @ready="post.videoReady = true"
             />
+
+            <transition name="fade-scale">
+              <img
+                v-if="post.showLikeAnimation"
+                src="~assets/anim_heart_2.gif"
+                class="like-animation-heart"
+                :style="{ top: post.animY + 'px', left: post.animX + 'px' }"
+                @load="onGifLoad(post)"
+              />
+            </transition>
           </div>
 
-          <img
+          <div
             v-if="post.type === 'image'"
-            loading="lazy"
-            :src="getPostSrc(post.mediaUrl)"
-            style="width: 100%; border-radius: 8px"
-          />
+            class="image-container"
+            @click="handlePostDoubleTap(post, $event)"
+          >
+            <img :src="getPostSrc(post.mediaUrl)" style="width: 100%; border-radius: 8px" />
+            <transition name="fade-scale">
+              <img
+                v-if="post.showLikeAnimation"
+                src="~assets/anim_heart_2.gif"
+                class="like-animation-heart"
+                :style="{ top: post.animY + 'px', left: post.animX + 'px' }"
+                @load="onGifLoad(post)"
+              />
+            </transition>
+          </div>
         </div>
 
         <div>
-          <PostActionCounts :post="post" />
+          <PostActionCounts :post="post" :ref="(el) => setPostActionCountRef(post.id, el)" />
         </div>
 
         <q-card-section class="q-pa-sm">
@@ -127,7 +146,7 @@
                 :href="link.url"
                 clickable
                 dense
-                style="font-size: 10px; padding: 8px; margin: 0"
+                style="font-size: 10px; padding: 8px; margin: 0; overflow: hidden"
                 outline
                 class="text-green"
                 icon="link"
@@ -139,13 +158,13 @@
                 v-for="mention in post.keywords.mentions"
                 :key="mention"
                 clickable
-                style="font-size: 10px; padding: 3px 4px; margin: 0; border: 1px solid #dddddd67"
+                style="font-size: 10px; padding: 3px 4px; margin: 0; border: 1px solid #dddddd67: overflow: hidden;"
                 @click="openDrawer(post, 'mentions')"
               >
                 <i class="material-icons" style="padding-right: 5px; font-size: 12px"
                   >account_circle</i
                 >
-                {{ mention }}
+                {{ mention.username }}
               </q-chip>
             </div>
             <span class="text-grey tags" style="font-size: 12px">
@@ -263,6 +282,10 @@ async function fetchPosts(isFirst = false) {
       } else {
         p.likedByMe = false
       }
+
+      p.showLikeAnimation = false
+      p.animX = 0
+      p.animY = 0
     })
 
     //console.log(data)
@@ -286,6 +309,71 @@ onMounted(() => {
 defineExpose({
   fetchPosts,
 })
+
+let lastTap = 0
+const DBL_TAP_THRESHOLD = 300
+
+// Using a Map to store references to PostActionCounts components by post.id
+const postActionCountsRefs = new Map()
+
+// Function to assign the component instance to the map
+const setPostActionCountRef = (postId, el) => {
+  if (el) {
+    postActionCountsRefs.set(postId, el)
+  } else {
+    // When a component is unmounted, its ref will be null, so remove it from the map
+    postActionCountsRefs.delete(postId)
+  }
+}
+
+async function handlePostDoubleTap(post, event) {
+  const now = Date.now()
+  if (now - lastTap < DBL_TAP_THRESHOLD) {
+    // Double tap detected
+    if (!post.likedByMe) {
+      // Only trigger if it's going to be liked (not unliked)
+      const imageRect = event.currentTarget.getBoundingClientRect()
+      post.animX = event.clientX - imageRect.left - 50 // Adjust -50 to center the GIF
+      post.animY = event.clientY - imageRect.top - 50 // Adjust -50 to center the GIF
+
+      post.showLikeAnimation = true
+
+      // Get the specific PostActionCounts component instance using the post.id
+      const postActionCountsInstance = postActionCountsRefs.get(post.id)
+      if (postActionCountsInstance) {
+        // Await the toggleLike call
+        await postActionCountsInstance.toggleLike(post)
+      } else {
+        console.warn(`PostActionCounts instance not found for post ID: ${post.id}`)
+      }
+    } else {
+      // If double-tapping an already liked image unlikes it,
+      // you might not want the animation. Or you could show a different one.
+      // Get the specific PostActionCounts component instance using the post.id
+      const postActionCountsInstance = postActionCountsRefs.get(post.id)
+      if (postActionCountsInstance) {
+        // Await the toggleLike call even if already liked (to unlike)
+        await postActionCountsInstance.toggleLike(post)
+      } else {
+        console.warn(`PostActionCounts instance not found for post ID: ${post.id}`)
+      }
+    }
+    lastTap = 0 // Reset last tap
+  } else {
+    lastTap = now
+  }
+}
+
+// Function to hide the GIF after it finishes playing
+function onGifLoad(post) {
+  // Assuming the GIF animation duration is around 1 second (1000ms)
+  // Adjust this timeout based on the actual duration of your GIF.
+  setTimeout(() => {
+    post.showLikeAnimation = false
+    post.animX = 0 // Reset position
+    post.animY = 0
+  }, 300) // Hide after 1 second (adjust as needed)
+}
 </script>
 
 <style scoped lang="scss">
@@ -317,5 +405,45 @@ defineExpose({
   top: 5px;
   right: 45%;
   border-radius: 20px;
+}
+
+.image-container {
+  position: relative; /* Crucial for absolute positioning of the heart */
+  display: inline-block; /* Helps prevent extra space below image if needed */
+  overflow: hidden; /* Ensures heart doesn't spill out if it scales too big */
+  border-radius: 8px; /* Match your image border-radius */
+}
+
+.like-animation-heart {
+  position: absolute;
+  width: 100px; /* Adjust size of your GIF */
+  height: 100px; /* Adjust size of your GIF */
+  pointer-events: none; /* Allows clicks to pass through to the image */
+  transform: translate(-50%, -50%); /* Centers the GIF relative to its own dimensions */
+  /* Initial state for transition */
+  opacity: 0;
+  transform: scale(0.5);
+  transition:
+    opacity 0.3s ease-out,
+    transform 0.3s ease-out; /* Smooth transition */
+}
+
+/* Transition classes for Vue's <transition> component */
+.fade-scale-enter-active {
+  transition: all 0.3s ease-out; /* How it appears */
+}
+.fade-scale-leave-active {
+  transition: all 1.5s cubic-bezier(1, 0.5, 0.8, 1); /* How it disappears */
+}
+
+.fade-scale-enter-from,
+.fade-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.8);
+}
+
+.fade-scale-enter-to {
+  opacity: 1;
+  transform: scale(1.2); /* Slightly larger when it appears */
 }
 </style>

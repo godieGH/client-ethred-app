@@ -172,6 +172,7 @@
           icon="add"
           aria-label="Create"
         />
+        <q-btn flat dence round size="12px" icon="fab fa-instagram" />
         <!-- Desktop: wide rounded search button -->
         <template v-if="leftDrawerOpen">
           <q-btn
@@ -190,6 +191,7 @@
             </template>
           </q-btn>
         </template>
+
         <!-- Mobile: original search icon -->
         <template v-else>
           <q-btn
@@ -202,7 +204,28 @@
           />
         </template>
 
-        <q-btn flat dence round icon="fab fa-facebook-messenger" aria-label="Direct Message" />
+        <q-btn
+          flat
+          dence
+          round
+          size="12px"
+          icon="fab fa-facebook-messenger"
+          @click="() => (showMessenger = true)"
+        />
+
+        <q-dialog maximized full-height full-width v-model="showMessenger">
+          <q-card class="q-pa-sm" style="overflow-y: hidden">
+            <div>
+              <div style="display: flex; align-items: center">
+                <i v-close-popup class="q-pr-sm fas fa-chevron-left"></i>
+                <img src="~assets/logo.png" height="45" />
+              </div>
+            </div>
+            <div>
+              <MessengerPanel />
+            </div>
+          </q-card>
+        </q-dialog>
 
         <!-- Always present: dark/light toggle -->
         <q-btn
@@ -247,6 +270,21 @@
       <router-view />
     </q-page-container>
 
+    <q-footer style="z-index: 9999999" v-if="footerStatus">
+      <div v-if="!isOnline" class="q-pa-xs q-py-sm bg-dark-page">
+        <i style="font-size: 18px" class="material-icons">wifi_off</i> You're offline. Please check
+        your Internet connection.
+      </div>
+      <div
+        v-else
+        class="q-pa-xs bg-dark-page"
+        style="display: flex; justify-content: space-between; align-items: center"
+      >
+        <div><i class="material-icons q-px-sm" style="font-size: 20px">wifi</i> Back Online</div>
+        <q-btn @click="footerStatus = false" flat dense icon="close" />
+      </div>
+    </q-footer>
+
     <q-dialog v-model="showDrawer" position="bottom" transition-show="slide-up">
       <q-card style="height: 100vh; border-radius: 10px">
         <div style="flex: 0 0 auto; position: sticky; top: 0; z-index: 1; padding: 8px">
@@ -270,7 +308,8 @@
 import SettingsPanel from 'components/SettingsPanel.vue'
 import CreatePanel from 'components/CreatePanel.vue'
 import SearchPanel from 'components/SearchPanel.vue'
-import { ref, watch, onMounted, computed } from 'vue'
+import MessengerPanel from 'components/MessengerPanel.vue'
+import { ref, watch, onMounted, computed, onBeforeUnmount, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useUserStore } from 'stores/user'
@@ -292,20 +331,35 @@ watch(
   },
 )
 
+const showMessenger = ref(false)
+
 // Control for side drawer open/close on small screens
 const leftDrawerOpen = ref(false)
 // Control for collapse/expand (mini mode) on all screens
 const isCollapsed = ref(true)
 const showDrawer = ref(false)
 
+import { api } from "boot/axios"
 const isChangingTheme = ref(false)
-
+const idx = ref(null)
 onMounted(async () => {
   const needLogin = await userStore.initialize()
   if (needLogin) {
     router.push('/auth/login')
     return
   }
+  
+  
+  idx.value = setInterval(async function() {
+       try {
+          const { data } = await api.post('/users/token/refresh')
+          userStore.setUser(data.user, data.accessToken)
+       } catch(err) {
+          console.log(err.message)
+       }
+    }, 15*60*1000);
+    
+    
   await settingsStore.fetcUserPreferedSettings()
   $q.dark.set(settingsStore.dark)
 })
@@ -317,7 +371,6 @@ async function toggleDarkMode() {
     $q.dark.set(!$q.dark.isActive)
   } catch (err) {
     $q.notify({
-      type: 'negative',
       message: 'Failed to change theme. connection problems',
     })
     console.log(err.message)
@@ -336,6 +389,80 @@ function openCreatePanel() {
   //alert("hello world")
   showDrawer.value = true
 }
+
+import { debounce } from 'quasar'
+import { io } from 'socket.io-client'
+
+const footerStatus = ref(false) // Initialize to false, so it's not displayed initially
+const isOnline = ref(true) // This will now reflect both network and server connectivity
+
+let socket // Declare socket outside to make it accessible to other functions
+
+const hideFooter = debounce(() => {
+  footerStatus.value = false
+}, 3500)
+
+const handleOnlineStatusChange = () => {
+  // Check network connectivity first
+  const networkIsOnline = navigator.onLine
+
+  // Check socket.io connection status
+  const serverIsAccessible = socket && socket.connected
+
+  // Set isOnline based on both conditions
+  isOnline.value = networkIsOnline && serverIsAccessible
+
+  // The footer should only show if we are NOT online (i.e., disconnected)
+  if (!isOnline.value) {
+    footerStatus.value = true
+  }
+  // No need for an else here, as hideFooter in the watch will handle hiding when online
+}
+
+onMounted(() => {
+  socket = io(import.meta.env.VITE_API_BASE_URL)
+
+  // Listen for socket.io connection events
+  socket.on('connect', () => {
+    console.log('Connected to server with socket ID:', socket.id)
+    handleOnlineStatusChange() // Update status when connected
+  })
+
+  socket.on('disconnect', (reason) => {
+    console.log('Disconnected from server:', reason)
+    handleOnlineStatusChange() // Update status when disconnected
+  })
+
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error)
+    handleOnlineStatusChange() // Update status on connection error
+  })
+
+  window.addEventListener('online', handleOnlineStatusChange)
+  window.addEventListener('offline', handleOnlineStatusChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('online', handleOnlineStatusChange)
+  window.removeEventListener('offline', handleOnlineStatusChange)
+  if (socket) {
+    socket.disconnect() // Disconnect socket when component unmounts
+  }
+})
+
+watch(isOnline, (newValue) => {
+  if (newValue === true) {
+    // If we just came online (or were already online), hide the footer after a delay
+    hideFooter()
+  } else {
+    // If we just went offline, immediately show the footer
+    footerStatus.value = true
+  }
+})
+
+onUnmounted(() => {
+   clearInterval(idx.value)
+})
 </script>
 
 <style scoped>

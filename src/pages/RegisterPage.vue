@@ -13,10 +13,12 @@
           :rules="[
             (val) => !!val || 'Full name is required',
             (val) =>
-              /^[A-Za-z'-]+(?:\s+[A-Za-z'-]+)+$/.test(val) ||
-              'Enter at least first and last name (letters, hyphens, apostrophes only)',
+              /^[A-Za-z'-]+(?:\s+[A-Za-z'-]+){0,2}$/.test(val) ||
+              'Enter at least first and last name, and not more than three names (letters, hyphens, apostrophes only)',
+            (val) => val.length <= 30 || 'Name cannot exceed 30 characters',
           ]"
         />
+
         <q-input
           v-model="form.email"
           label="Email"
@@ -100,8 +102,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
-const baseUrl = import.meta.env.VITE_API_BASE_URL
+import api from 'boot/axios'
 
 const router = useRouter()
 const registerForm = ref(null)
@@ -131,7 +132,7 @@ const submitForm = async () => {
     btnColor.value = 'secondary'
 
     try {
-      const res = await axios.post(`${baseUrl}/users/register`, form.value)
+      const res = await api.post(`/users/register`, form.value)
 
       if (res.status === 201) {
         msg.value.head = 'Success'

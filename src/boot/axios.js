@@ -2,9 +2,20 @@
 import { defineBoot } from '#q-app/wrappers'
 import axios from 'axios'
 
+// Determine the base URL based on the environment
+const getBaseUrl = () => {
+  if (process.env.NODE_ENV === 'development') {
+    // For development, use the VITE_API_BASE_URL from your .env file
+    return process.env.VITE_API_BASE_URL;
+  } else {
+    // For production, use '/' to indicate a relative path
+    return '/';
+  }
+};
+
 // 1. Create an Axios instance with credentials enabled
 const api = axios.create({
-  baseURL: process.env.VITE_API_BASE_URL, // e.g. 'https://api.myapp.com'
+  baseURL: getBaseUrl(), // Use the dynamically determined base URL
   withCredentials: true, // ← include cookies on cross-site
 })
 

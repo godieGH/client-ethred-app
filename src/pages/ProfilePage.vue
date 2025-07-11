@@ -127,7 +127,7 @@
         <q-tab-panels v-model="tab" animated class="panel-content">
           <!-- POSTS -->
           <q-tab-panel name="posts" class="panel-content">
-            <PostsTab ref="postsTabRef" :user-id="userStore.user.id" />
+            <PostsTab ref="postsTabRef" :user-id="userStore.user?userStore.user.id:null" />
           </q-tab-panel>
 
           <!-- FOLLOWING -->
@@ -508,6 +508,14 @@ const validateName = (val) => {
   if (!val) {
     return 'Full name is required'
   }
+
+  if (val.split(' ').length > 3) {
+    return 'Name too long. Please enter upto three names.'
+  }
+
+  if (val.length > 30) {
+    return 'Too many characters for a name.'
+  }
   const regex = /^[A-Za-z'-]+(?:\s+[A-Za-z'-]+)+$/
   if (!regex.test(val)) {
     return 'Enter at least first and last name (letters, hyphens, apostrophes only)'
@@ -521,6 +529,9 @@ const validateUsernameFormat = (val) => {
   }
   if (val.length < 4) {
     return 'At least 4 characters'
+  }
+  if (val.length > 15) {
+    return 'username too long. '
   }
   if (!/^[a-z0-9._]+$/.test(val)) {
     return 'Only lowercase letters, numbers, “.” and “_”'

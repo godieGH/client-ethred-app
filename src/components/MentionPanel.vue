@@ -79,7 +79,7 @@ onMounted(async () => {
   loading.value = true
   try {
     mentionTags.forEach(async (val) => {
-      const { data } = await api.get(`/posts/mentioned/user/${val}/`)
+      const { data } = await api.get(`/posts/mentioned/user/${val.id}/`)
       mentions.value.push(data)
       loading.value = false
     })

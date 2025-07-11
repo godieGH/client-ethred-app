@@ -27,7 +27,7 @@
 
       <div v-else-if="error && !people.length" class="text-red text-center q-my-xl">
         Failed to load users.
-        <q-btn flat label="Retry" @click="refresh" />
+        <q-btn :loading="retry" flat label="Retry" @click="refresh" />
       </div>
 
       <div v-else id="peopleListScrollArea" class="people-list-container" @scroll="handleScroll">
@@ -76,7 +76,7 @@
         </div>
         <div v-if="error && people.length && !loadingMore" class="text-red text-center q-my-sm">
           Failed to load more users.
-          <q-btn flat label="Retry" @click="fetchPeople(false)" />
+          <q-btn :loading="retry" flat label="Retry" @click="refreshMore" />
         </div>
       </div>
     </div>
@@ -112,6 +112,7 @@ const people = ref([])
 const initialLoading = ref(true) // For first fetch loading state
 const loadingMore = ref(false) // For subsequent fetches (scrolling)
 const error = ref(null)
+const retry = ref(false)
 
 const actionInProgress = reactive({})
 
@@ -159,13 +160,13 @@ async function fetchPeople(isInitialLoad = false) {
   } catch (err) {
     console.error('Error fetching people:', err)
     error.value = err
-    $q.notify({
+    /*$q.notify({
       color: 'negative',
       message: isInitialLoad ? 'Failed to load creators.' : 'Failed to load more creators.',
       icon: 'report_problem',
       position: 'top',
       timeout: 3000,
-    })
+    })*/
   } finally {
     // Reset loading states in finally block
     if (isInitialLoad) {
@@ -173,6 +174,7 @@ async function fetchPeople(isInitialLoad = false) {
     } else {
       loadingMore.value = false
     }
+    retry.value = false
   }
 }
 
@@ -237,6 +239,15 @@ const handleScroll = throttle((event) => {
 onMounted(() => {
   fetchPeople(true) // Initial load
 })
+
+function refresh() {
+  retry.value = true
+  fetchPeople(true)
+}
+function refreshMore() {
+  retry.value = true
+  fetchPeople(false)
+}
 </script>
 
 <style scoped>

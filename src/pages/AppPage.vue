@@ -4,7 +4,7 @@
       <div
         id="postsScrollArea"
         @scroll="fetchMorePost"
-        class="col-12 col-md-6"
+        class="col-12 col-md-5"
         style="overflow-y: auto; height: 100vh; padding-bottom: 70px"
       >
         <div>
@@ -61,7 +61,7 @@
               </q-item>
             </q-card>
           </div>
-          <div v-else class="q-px-lg">
+          <div v-else class="q-px-md">
             <q-virtual-scroll
               scroll-target="#postsScrollArea"
               :items="posts"
@@ -71,7 +71,7 @@
               <q-card :key="post.id" flat bordered style="margin: 10px 0">
                 <q-item>
                   <q-item-section avatar>
-                    <q-avatar @click="openMeta(post, 'profile-preview')">
+                    <q-avatar @click="openProfilePreview(post.user.id)">
                       <img :src="getAvatarSrc(post.user.avatar)" />
                     </q-avatar>
                   </q-item-section>
@@ -100,7 +100,6 @@
                         >
                         <i v-if="post.audience == 'public'" class="material-icons">public</i>
                         <i v-else-if="post.audience == 'friends'" class="material-icons">people</i>
-                        <i v-else class=""></i>
                       </span>
                     </span>
                   </q-item-section>
@@ -111,7 +110,12 @@
 
                   <q-item-section class="q-pl-sm">
                     <div v-if="post.type === 'image' || post.type === 'video'" class="q-mb-sm">
-                      <div v-if="post.type === 'video'" class="q-video">
+                      <div
+                        @click="handlePostDoubleTap(post, $event)"
+                        v-if="post.type === 'video'"
+                        :style="$q.screen.width >= 1000 ? 'height: 100%; padding: 0 20px;' : ''"
+                        class="q-video"
+                      >
                         <q-skeleton
                           v-show="!post.videoReady"
                           type="rect"
@@ -126,12 +130,21 @@
                           :poster="post.thumbnailUrl"
                           @ready="post.videoReady = true"
                         />
+                        <transition name="fade-scale">
+                          <img
+                            v-if="post.showLikeAnimation"
+                            src="~assets/anim_heart_2.gif"
+                            class="like-animation-heart"
+                            :style="{ top: post.animY + 'px', left: post.animX + 'px' }"
+                            @load="onGifLoad(post)"
+                          />
+                        </transition>
                       </div>
 
                       <div
                         v-if="post.type === 'image'"
                         class="image-container"
-                        @click="handleImageTap(post, $event)"
+                        @click="handlePostDoubleTap(post, $event)"
                       >
                         <img :src="post.mediaUrl" style="width: 100%; border-radius: 8px" />
                         <transition name="fade-scale">
@@ -249,7 +262,7 @@
                             <i class="material-icons" style="padding-right: 5px; font-size: 12px"
                               >account_circle</i
                             >
-                            {{ mention }}
+                            {{ mention.username }}
                           </q-chip>
                         </div>
                         <span class="text-grey tags" style="font-size: 12px">
@@ -264,17 +277,31 @@
             <div v-if="loadingMorePosts" class="flex justify-center q-my-md">
               <q-spinner-dots size="24px" />
             </div>
+
+            <div v-else-if="error" class="text-red text-center q-my-sm">
+              Failed to load more posts.
+              <q-btn
+                :loading="retry"
+                flat
+                label="Retry"
+                @click="
+                  () => {
+                    fetchPosts()
+                    retry = true
+                  }
+                "
+              />
+            </div>
           </div>
         </div>
       </div>
 
       <div
         v-if="!isMobile"
-        class="col-12 col-md-6"
+        class="col-12 col-md-7"
         style="height: 95vh; overflow: hidden; min-width: 0"
       >
         <template v-if="activePost">
-          <!-- Dynamically choose which component to render -->
           <component
             :is="currentPanelComponent"
             :post="activePost"
@@ -299,7 +326,6 @@
           :class="{ 'full-card': isVerySmall }"
           :style="[mobileCardStyle, { display: 'flex', flexDirection: 'column' }]"
         >
-          <!-- HEADER: fixed -->
           <div
             :class="showMaximized ? 'q-mt-md' : ''"
             style="flex: 0 0 auto; position: sticky; top: 0; z-index: 1; padding: 8px"
@@ -308,7 +334,6 @@
             <span style="margin-left: 8px">{{ panelTitle }}</span>
           </div>
 
-          <!-- BODY: only this scrolls -->
           <div style="flex: 1 1 auto; overflow-y: auto; padding: 8px">
             <component
               :is="currentPanelComponent"
@@ -318,9 +343,28 @@
           </div>
         </q-card>
       </q-dialog>
+
+      <q-dialog
+        v-model="showProfilePreviewDrawer"
+        :maximized="true"
+        position="bottom"
+        transition-show="slide-up"
+        full-width
+      >
+        <q-card :style="`height: ${$q.screen.height}px;`">
+          <div class="q-mt-md" style="position: sticky; top: 0; z-index: 1; padding: 8px">
+            <q-btn flat round icon="close" @click="showProfilePreviewDrawer = false" />
+            <span style="margin-left: 8px">Profile</span>
+          </div>
+          <div>
+            <ProfilePreview :post="{ user: { id: activeProfileId } }" />
+          </div>
+        </q-card>
+      </q-dialog>
     </div>
   </q-page>
 </template>
+
 <script setup>
 import LikersStackAvatar from '../components/misc/LikersStackAvatar.vue'
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
@@ -341,7 +385,7 @@ import LinksPanel from 'components/LinksPanel.vue'
 import MentionPanel from 'components/MentionPanel.vue'
 import SidePanelDefault from 'components/SidePanelDefault.vue'
 import LikersFollowedByMePanel from 'components/LikersFollowedByMePanel.vue'
-import PreviewProfile from 'components/ProfilePreview.vue'
+import ProfilePreview from 'components/ProfilePreview.vue' // Renamed from PreviewProfile for consistency
 
 const feedsStore = useFeedsStore()
 const userStore = useUserStore()
@@ -353,8 +397,12 @@ const loadingMorePosts = ref(false)
 const posts = ref([])
 const activePost = ref(null)
 const activeView = ref(null)
-const showDrawer = ref(false)
-const showMaximized = ref(false)
+const showDrawer = ref(false) // For comments, likes, etc.
+const showMaximized = ref(false) // Still used for the existing dialog for adaptive sizing
+
+// NEW STATE FOR PROFILE PREVIEW
+const activeProfileId = ref(null)
+const showProfilePreviewDrawer = ref(false)
 
 let lastTap = 0
 const DBL_TAP_THRESHOLD = 300
@@ -367,7 +415,7 @@ const panelMap = {
   links: LinksPanel,
   mention: MentionPanel,
   'followed-by-me-who-liked-post': LikersFollowedByMePanel,
-  'profile-preview': PreviewProfile,
+  // 'profile-preview' is no longer in this map, as it has its own dialog
 }
 
 const panelNames = {
@@ -377,7 +425,6 @@ const panelNames = {
   links: 'Links',
   mention: 'Mentions',
   'followed-by-me-who-liked-post': 'Your Friends Reaction',
-  'profile-preview': 'Profile',
 }
 
 const panelTitle = computed(() => {
@@ -402,7 +449,6 @@ const mobileCardStyle = computed(() => {
 const panelHeights = {
   comments: '95vh',
   'followed-by-me-who-liked-post': '95vh',
-  'profile-preview': '95vh',
   likes: '95vh',
   shares: 'auto',
   links: 'auto',
@@ -425,25 +471,36 @@ const currentPanelComponent = computed(() => {
   return panelMap[activeView.value] || null
 })
 
-// Call this on any click, passing the post and which panel you want
+// Function to open the "other" meta dialogs
 function openMeta(post, view) {
-  activePost.value = null
-  activePost.value = post
-  activeView.value = view
+  // Close profile preview if it's open
+  showProfilePreviewDrawer.value = false
+
+  activePost.value = null // Clear previous active post data
+  activePost.value = post // Set new active post
+  activeView.value = view // Set new view (comments, likes, etc.)
+
   if (isMobile.value) {
     showDrawer.value = true
-  }
-
-  if (activeView.value === 'profile-preview') {
-    showMaximized.value = true
-  } else {
+    // This dialog is not maximized by default, so showMaximized will remain false for these views
     showMaximized.value = false
   }
+}
+
+// NEW FUNCTION TO OPEN PROFILE PREVIEW DIALOG
+function openProfilePreview(userId) {
+  // Close the "other" meta dialog if it's open
+  showDrawer.value = false
+
+  activeProfileId.value = userId
+  showProfilePreviewDrawer.value = true
 }
 
 const cursor = ref(null)
 const limit = ref(10)
 const hasMore = ref(true)
+const error = ref(false)
+const retry = ref(false)
 
 async function fetchPosts(isFirst = false) {
   if (
@@ -482,6 +539,7 @@ async function fetchPosts(isFirst = false) {
     //console.log(posts.value)
   } catch (err) {
     console.error('Error fetching posts:', err.message)
+    error.value = true
   } finally {
     if (isFirst) loading.value = false
     else loadingMorePosts.value = false
@@ -592,7 +650,7 @@ async function onNearBottom(e) {
 }
 const fetchMorePost = throttle(onNearBottom, 50)
 
-function handleImageTap(post, event) {
+function handlePostDoubleTap(post, event) {
   const now = Date.now()
   if (now - lastTap < DBL_TAP_THRESHOLD) {
     // Double tap detected

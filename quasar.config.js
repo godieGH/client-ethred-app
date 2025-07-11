@@ -15,7 +15,7 @@ export default defineConfig((ctx) => {
     // app boot file (/src/boot)
     // --> boot files are part of "main.js"
     // https://v2.quasar.dev/quasar-cli-vite/boot-files
-    boot: ['global-mixin', 'axios', 'eruda', 'event-bus', 'global-components'],
+    boot: ['global-mixin', 'axios', 'event-bus', ctx.dev ? 'eruda' : null, 'global-components'],
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#css
     css: ['app.scss'],
@@ -46,19 +46,18 @@ export default defineConfig((ctx) => {
       //vueDevtools,
       // vueOptionsAPI: false,
 
-      // rebuildCache: true, // rebuilds Vite/linter/etc cache on startup
+      chunkSizeWarningLimit: 4000, // rebuildCache: true, // rebuilds Vite/linter/etc cache on startup
 
       // publicPath: '/',
       // analyze: true,
       // env: {},
       // rawDefine: {}
       // ignorePublicFolder: true,
-      // minify: false,
+      minify: false,
       // polyfillModulePreload: true,
       // distDir
 
       // extendViteConf (viteConf) {},
-      // viteVuePluginOptions: {},
 
       vitePlugins: [
         [
@@ -97,7 +96,7 @@ export default defineConfig((ctx) => {
     devServer: {
       port: 8080,
       https: false,
-      //open: true, // opens browser window automatically
+      open: false, // opens browser window automatically
 
       proxy: {
         '/uploads': {
@@ -142,7 +141,7 @@ export default defineConfig((ctx) => {
 
     // animations: 'all', // --- includes all animations
     // https://v2.quasar.dev/options/animations
-    animations: [],
+    animations: 'all',
 
     // https://v2.quasar.dev/quasar-cli-vite/quasar-config-file#sourcefiles
     // sourceFiles: {
@@ -183,16 +182,88 @@ export default defineConfig((ctx) => {
 
     // https://v2.quasar.dev/quasar-cli-vite/developing-pwa/configuring-pwa
     pwa: {
-      workboxMode: 'GenerateSW', // 'GenerateSW' or 'InjectManifest'
-      // swFilename: 'sw.js',
-      // manifestFilename: 'manifest.json',
-      // extendManifestJson (json) {},
-      // useCredentialsForManifestTag: true,
-      // injectPwaMetaTags: false,
-      // extendPWACustomSWConf (esbuildConf) {},
-      // extendGenerateSWOptions (cfg) {},
-      // extendInjectManifestOptions (cfg) {}
-    },
+  workboxMode: 'GenerateSW',
+  manifest: {
+    name: 'ethred.com',
+    short_name: 'Ethred',
+    description: 'Ethred Social Media App',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: '#ffffff',
+    theme_color: '#1f2937',
+    icons: [
+      { src: 'icons/icon-128x128.png', sizes: '128x128', type: 'image/png' },
+      { src: 'icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { src: 'icons/icon-256x256.png', sizes: '256x256', type: 'image/png' },
+      { src: 'icons/icon-384x384.png', sizes: '384x384', type: 'image/png' },
+      { src: 'icons/icon-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+  },
+  workboxOptions: {
+    skipWaiting: true,
+    clientsClaim: true,
+    exclude: [/\.map$/, /_redirects/],
+    runtimeCaching: [
+      {
+        urlPattern: /https:\/\/fonts\.googleapis\.com\/.*/i,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'google-fonts-stylesheets',
+          expiration: {
+            maxEntries: 10,
+            maxAgeSeconds: 60 * 60 * 24 * 365,
+          },
+        },
+      },
+      {
+        urlPattern: /https:\/\/fonts\.gstatic\.com\/.*/i,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'google-fonts-webfonts',
+          expiration: {
+            maxEntries: 30,
+            maxAgeSeconds: 60 * 60 * 24 * 365,
+          },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+      {
+        urlPattern: /\.(?:png|jpg|jpeg|svg|gif)$/i,
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'images',
+          expiration: {
+            maxEntries: 50,
+            maxAgeSeconds: 30 * 24 * 60 * 60,
+          },
+        },
+      },
+      {
+        urlPattern: new RegExp(`${process.env.VITE_API_BASE_URL || 'http://localhost:3000'}`),
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'api-cache',
+          expiration: {
+            maxEntries: 10,
+            maxAgeSeconds: 60 * 60 * 24,
+          },
+          cacheableResponse: { statuses: [0, 200] },
+        },
+      },
+      {
+        urlPattern: ({ request }) => request.mode === 'navigate',
+        handler: 'NetworkFirst',
+        options: {
+          networkTimeoutSeconds: 10,
+          cacheName: 'navigation-cache',
+        },
+      },
+    ],
+  },
+  extendGenerateSWOptions(cfg) {
+    cfg.navigateFallback = '/index.html'
+  },
+},
 
     // Full list of options: https://v2.quasar.dev/quasar-cli-vite/developing-cordova-apps/configuring-cordova
     cordova: {

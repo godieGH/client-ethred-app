@@ -1,31 +1,34 @@
 <template>
-  <div class="comment-bar">
-    <input
-      v-model="newComment"
-      type="text"
-      :placeholder="replyTo ? `Replying to @${replyTo}...` : 'Write a comment...'"
-      @keyup.enter="sendComment"
-      class="comment-input"
-      :class="$q.dark.isActive ? 'text-white' : 'text-dark'"
-    />
+  <div class="comment-input-area">
+    <div class="text-input-wrapper">
+      <button class="icon-button emoji-button">
+        <i class="material-icons">emoji_emotions</i>
+      </button>
 
-    <q-btn
+      <textarea
+        v-model="newComment"
+        class="comment-textarea"
+        :placeholder="replyTo ? `Replying to @${replyTo}...` : 'Write a comment...'"
+        rows="1"
+        @input="autoGrowTextarea"
+        ref="commentTextareaRef"
+      ></textarea>
+    </div>
+
+    <button
+      class="send-button"
       :loading="loading"
-      :disable="loading || !newComment"
-      flat
-      dense
-      class="send-btn"
-      :disabled="!newComment.trim()"
+      :disable="loading || !newComment.trim()"
+      :style="loading || !newComment.trim() ? 'opacity: 0.5; cursor: not-allowed;' : ''"
       @click="sendComment"
-      ><i :style="loading || !newComment ? 'color: #ddd' : ''" class="material-icons"
-        >send</i
-      ></q-btn
     >
+      <i class="material-icons">send</i>
+    </button>
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, nextTick } from 'vue'
 import { api } from 'boot/axios'
 import { useQuasar } from 'quasar'
 import { EventBus } from 'boot/event-bus'
@@ -43,11 +46,23 @@ const props = defineProps({
   },
 })
 
+// Template Ref for textarea
+const commentTextareaRef = ref(null)
+
 const $q = useQuasar()
 const newComment = ref('')
 const parent_id = ref(null)
 const loading = ref(false)
 const postId = props.post.id
+
+// Methods
+const autoGrowTextarea = () => {
+  const textarea = commentTextareaRef.value
+  if (textarea) {
+    textarea.style.height = 'auto'
+    textarea.style.height = `${textarea.scrollHeight}px`
+  }
+}
 
 // Watch for changes in replyId from the parent
 watch(
@@ -55,12 +70,21 @@ watch(
   (newId) => {
     parent_id.value = newId
     if (newId !== null) {
-      newComment.value = '@' + props.replyTo + ' '
+      newComment.value = `@${props.replyTo} `
+      nextTick(() => {
+        autoGrowTextarea() // Adjust textarea height after content changes
+        // Optionally, focus the textarea when entering reply mode
+        commentTextareaRef.value?.focus()
+      })
     } else {
       // If replyId becomes null (reply terminated from parent), clear the comment input
       newComment.value = ''
+      nextTick(() => {
+        autoGrowTextarea() // Reset textarea height
+      })
     }
   },
+  { immediate: true }, // Run immediately on component mount to set initial state
 )
 
 // Watch newComment to determine if reply mode should be terminated by user action
@@ -70,9 +94,6 @@ watch(newComment, (newVal) => {
   if (parent_id.value !== null && newVal.trim() === '') {
     emit('replyTerminated')
   }
-  // Also, consider if the user explicitly removes the @username prefix.
-  // This is an optional enhancement depending on desired UX.
-  // For now, the above condition should be sufficient.
 })
 
 async function sendComment() {
@@ -98,60 +119,134 @@ async function sendComment() {
     emit('replyTerminated') // This will also cause the parent to reset its replyId
   } catch (err) {
     console.error(err)
-    return
+    // You might want to show a notification here for the user if the send fails
+    $q.notify({
+      color: 'negative',
+      message: 'Failed to send comment. Please try again.',
+    })
   } finally {
     loading.value = false
   }
   newComment.value = ''
+  nextTick(() => {
+    autoGrowTextarea() // Reset textarea height after clearing content
+  })
 }
+
+// Lifecycle Hooks
+onMounted(() => {
+  autoGrowTextarea() // Initial height adjustment on mount
+})
 </script>
 
-<style scoped lang="scss">
-.comment-bar {
+<style scoped>
+.comment-input-area {
+  display: flex;
+  align-items: flex-end; /* Align items to the bottom */
+  padding: 5px;
+  background-color: #f5f5f5;
+  border-top: 1px solid #eee;
+  gap: 5px;
+  position: relative;
+}
+
+.icon-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
   display: flex;
   align-items: center;
-  padding: 8px 0;
-  z-index: 9999;
-  border-top: 1px solid #ddd;
-  opacity: 1;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+  color: #555;
 }
-.actions {
+
+.icon-button:active {
+  background-color: #e0e0e0;
+  transform: scale(0.9);
+}
+
+.icon-button .material-icons {
+  font-size: 24px;
+}
+
+.text-input-wrapper {
+  flex-grow: 1;
+  position: relative;
   display: flex;
-  gap: 8px;
-  margin-right: 8px;
+  align-items: center; /* Align items to the bottom */
+  background-color: #fff;
+  border-radius: 20px;
+  border: 1px solid #ddd;
+  color: var(--q-dark);
+  overflow: hidden;
+  min-height: 40px; /* Ensure a minimum height for the wrapper */
+  padding: 5px; /* Internal padding for wrapper */
 }
-.icon-btn {
+
+/* Specific style for the emoji button inside text-input-wrapper */
+.text-input-wrapper .emoji-button {
+  flex-shrink: 0; /* Prevent it from shrinking */
+  margin-right: 5px; /* Space between emoji button and text content */
+  padding: 5px;
+}
+
+.comment-textarea {
+  flex-grow: 1;
   border: none;
-  font-size: 20px;
-  cursor: pointer;
+  outline: none;
+  padding: 0; /* Remove internal padding, let container handle it */
+  font-size: 16px;
+  line-height: 1.4;
+  resize: none;
+  min-height: 20px;
+  max-height: 120px; /* Max height before scrollbar appears */
+  overflow-y: auto;
+  box-sizing: border-box;
+  color: inherit; /* Ensure text color respects dark mode if $q.dark.isActive is used elsewhere */
+  background: transparent; /* Ensure background is transparent */
 }
-.comment-input {
-  flex: 1;
-  border: 1px solid #ccc;
-  border-radius: 10px;
-  padding: 6px 12px;
-  background: transparent;
-  margin-right: 8px;
-  &:focus {
-    outline: none;
-  }
+
+/* Scrollbar styles for webkit browsers */
+.comment-textarea::-webkit-scrollbar {
+  width: 6px;
 }
-.send-btn {
+
+.comment-textarea::-webkit-scrollbar-thumb {
+  background-color: #ccc;
+  border-radius: 3px;
+}
+
+.comment-textarea::-webkit-scrollbar-track {
+  background-color: #f9f9f9;
+}
+
+.send-button {
   border: none;
-  padding: 6px 12px;
-  border-radius: 4px;
+  border-radius: 50%;
+  display: flex;
+  padding: 10px;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  background: transparent;
-  i {
-    color: green;
-    font-size: 30px;
-    &:active {
-      transform: scale(0.91);
-    }
-  }
+  transition: background-color 0.3s ease;
+  flex-shrink: 0;
+  background-color: transparent; /* Ensure button itself doesn't have a background */
 }
-.send-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+
+.send-button:active {
+  transform: scale(0.9);
+}
+
+.send-button .material-icons {
+  font-size: 24px;
+  color: green; /* Default color for send icon */
+}
+
+/* Style for disabled send button icon */
+.send-button[disabled] .material-icons {
+  color: #ddd !important; /* Use !important to override default color */
 }
 </style>

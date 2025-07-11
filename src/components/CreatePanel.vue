@@ -39,7 +39,7 @@
                     class="text-grey cramp-text"
                     v-for="user in suggestions"
                     :key="user"
-                    @click="addMention(user.username)"
+                    @click="addMention(user)"
                     ><i class="material-icons" style="padding-right: 10px; font-size: 18px"
                       >account_circle</i
                     >
@@ -69,7 +69,7 @@
             :key="'m' + i"
             removable
             @remove="removeMention(i)"
-            >@{{ m }}</q-chip
+            >@{{ m.username }}</q-chip
           >
           <q-chip
             :disable="disableInput"
@@ -406,7 +406,7 @@ function canAddTag() {
 
 function canAddMention() {
   if (mentions.value.length >= 5) {
-    $q.notify({ message: 'Mention limit reached (max 3)', color: 'warning' })
+    $q.notify({ message: 'Mention limit reached (max 5)', color: 'warning' })
     return false
   }
   return true
@@ -425,8 +425,8 @@ function attemptInsert(symbol) {
   if (!area) return
   const pos = area.selectionStart
   const text = postContent.value
-  if (symbol === '@' && mentions.value.length >= 3)
-    return $q.notify({ message: 'Mention limit reached (max 3)', color: 'warning' })
+  if (symbol === '@' && mentions.value.length >= 5)
+    return $q.notify({ message: 'Mention limit reached (max 5)', color: 'warning' })
   if (symbol === '#' && tags.value.length >= 5)
     return $q.notify({ message: 'Tag limit reached (max 5)', color: 'warning' })
   postContent.value = text.slice(0, pos) + symbol + text.slice(pos)
@@ -525,11 +525,15 @@ function onKeydown(e) {
 
     if (/^@\w+$/.test(current) && canAddMention()) {
       if (suggestions.value.length > 0) {
-        const username = suggestions.value[0].username
-        mentions.value.push(username)
-        return updateContent(val, current, area)
+        //const username = suggestions.value[0].username
+        mentions.value.push(suggestions.value[0])
+        updateContent(val, current, area)
+        setTimeout(function() {
+           suggestions.value = []
+        }, 100);
       }
-      suggestions.value = []
+      console.log(suggestions.value)
+      console.log(mentions.value)
       return
     }
 
@@ -554,7 +558,7 @@ function onKeydown(e) {
   }
 }
 
-function addMention(username) {
+function addMention(u) {
   const t = canAddMention()
   if (!t) return
   const val = postContent.value
@@ -563,9 +567,12 @@ function addMention(username) {
   const pos = area.selectionStart
   const words = val.slice(0, pos).split(/\s+/)
   const current = words.pop()
-  mentions.value.push(username)
-  suggestions.value = []
+  mentions.value.push(u)
   updateContent(val, current, area)
+  
+  setTimeout(function() {
+      suggestions.value = []
+   }, 100);
 }
 
 function updateContent(val, token, area) {
@@ -758,7 +765,7 @@ async function submitPost() {
   // --- Wait for the connection to be established ---
   await new Promise((resolve) => {
     socket.on('connect', () => {
-      console.log('Connected to server with socket ID:', socket.id)
+      //console.log('Connected to server with socket ID:', socket.id)
       resolve()
     })
   })
@@ -786,7 +793,7 @@ async function submitPost() {
   })
 
   // --- Listen for WebM progress events from the server ---
-  socket.on('webm_progress', (data) => {
+  socket.on('mp4_progress', (data) => {
     notif({ caption: `${data.percent}%` })
   })
 
@@ -890,7 +897,6 @@ async function submitPost() {
 
   disableInput.value = false
 }
-
 
 import { getPostSrc } from 'src/composables/formater'
 

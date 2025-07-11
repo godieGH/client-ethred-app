@@ -3,9 +3,10 @@
     ref="wrapper"
     class="video-wrapper"
     @click="onTap"
-    @dblclick.prevent="toggleMute"
     v-touch-pan.horizontal.prevent.mouse="onPan"
     @contextmenu.prevent
+    @mousemove="showControls"
+    @touchstart="showControls"
   >
     <q-skeleton
       v-if="initialLoading"
@@ -50,10 +51,11 @@
     </div>
 
     <q-icon
-      v-if="mute && !initialLoading"
-      name="volume_off"
-      size="32px"
-      class="overlay mute-icon text-white"
+      v-if="showControlsOverlay && !initialLoading"
+      :name="mute ? 'volume_off' : 'volume_up'"
+      size="20px"
+      class="overlay mute-toggle-btn text-white"
+      @click.stop="toggleMute"
     />
   </div>
 </template>
@@ -63,7 +65,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { EventBus } from 'boot/event-bus'
 import { QSpinner, QIcon, QSkeleton } from 'quasar'
 import { useSettingsStore } from 'stores/SettingsStore'
-import Hls from 'hls.js'
+//import Hls from 'hls.js'
 
 const props = defineProps({
   src: { type: String, required: true },
@@ -80,6 +82,13 @@ const seeking = ref(false)
 const currentTime = ref(0)
 const initialLoading = ref(true) // Always starts as true since src is always there and needs loading
 const isIntersecting = ref(false) // Reactive variable to track intersection state
+const showControlsOverlay = ref(true) // Controls visibility of mute button
+let controlsTimeout = null
+
+// New variables for double tap detection
+let tapTimeout = null
+let lastTapTime = 0
+const DOUBLE_TAP_THRESHOLD = 300 // ms - adjust as needed
 
 let hls = null
 
@@ -124,16 +133,36 @@ function onTap() {
   if (initialLoading.value) return
   if (seeking.value) return // If we were seeking, don't trigger tap
 
-  isPlaying.value ? video.value.pause() : playVideo()
+  const now = Date.now()
+  if (now - lastTapTime < DOUBLE_TAP_THRESHOLD) {
+    // This is a double tap
+    clearTimeout(tapTimeout) // Clear any pending single tap action
+    lastTapTime = 0 // Reset last tap time
+    //console.log('Double Tap Detected - no play/pause action')
+    // You could add a specific double-tap action here if desired,
+    // but the request is to prevent play/pause on double tap.
+  } else {
+    // This is potentially a single tap, set a timeout to execute play/pause
+    lastTapTime = now
+    clearTimeout(tapTimeout) // Ensure no old timeouts are hanging
+    tapTimeout = setTimeout(() => {
+      // If this code runs, it means no second tap occurred within the threshold
+      isPlaying.value ? video.value.pause() : playVideo()
+      lastTapTime = 0 // Reset for the next tap sequence
+      showControls() // Show controls on tap
+    }, DOUBLE_TAP_THRESHOLD)
+  }
 }
 
 function toggleMute() {
   if (initialLoading.value) return
   mute.value = !mute.value
+  showControls() // Show controls on mute toggle
 }
 
 function onBuffering() {
   loading.value = true
+  showControls()
 }
 
 function onPlaying() {
@@ -141,17 +170,19 @@ function onPlaying() {
   isPlaying.value = true
   showPlayButton.value = false
   initialLoading.value = false
-  // `playVideo()` already handles pausing others, no need to re-broadcast here.
+  showControls()
 }
 
 function onPaused() {
   isPlaying.value = false
   showPlayButton.value = true
+  showControls()
 }
 
 function onEnded() {
   isPlaying.value = false
   showPlayButton.value = true
+  showControls()
   // Optional: loop video or play next
 }
 
@@ -175,6 +206,7 @@ function onCanPlay() {
     if (autoplay.value && isIntersecting.value && !isPlaying.value) {
       playVideo()
     }
+    showControls() // Show controls when video can play
   }
 }
 
@@ -184,6 +216,8 @@ function onPan({ direction, isFirst, isFinal, offset }) {
   if (direction !== 'left' && direction !== 'right') {
     return
   }
+
+  showControls() // Show controls on pan interaction
 
   if (isFirst) {
     seeking.value = true
@@ -241,12 +275,26 @@ function formatTime(sec) {
   return `${m}:${s}`
 }
 
-function loadHlsVideo() {
+async function loadHlsVideo() {
   initialLoading.value = true
   if (hls) {
     hls.destroy()
     hls = null
   }
+  
+  // Dynamically import Hls.js here
+  let HlsModule;
+  try {
+    HlsModule = (await import('hls.js'));
+  } catch (error) {
+    console.error("Failed to load hls.js:", error);
+    initialLoading.value = false;
+    // Handle gracefully, perhaps show an error message to the user
+    return; // Stop execution if hls.js can't be loaded
+  }
+
+  const Hls = HlsModule.default; // Get the default export
+
 
   if (video.value && Hls.isSupported()) {
     hls = new Hls()
@@ -262,8 +310,7 @@ function loadHlsVideo() {
         initialLoading.value = false
         hls.destroy()
       } else {
-        EventBus.on('pause-all', onPauseAll)
-        console.warn('HLS non-fatal error:', data)
+        //console.warn('HLS non-fatal error:', data)
       }
     })
     video.value.muted = mute.value
@@ -276,6 +323,15 @@ function loadHlsVideo() {
     console.error('This browser does not support HLS or native HLS playback. Consider a fallback.')
     initialLoading.value = false
   }
+}
+
+// Function to show controls and hide them after a delay
+function showControls() {
+  showControlsOverlay.value = true
+  clearTimeout(controlsTimeout)
+  controlsTimeout = setTimeout(() => {
+    showControlsOverlay.value = false
+  }, 3000) // Hide after 3 seconds of inactivity
 }
 
 let observer
@@ -306,6 +362,9 @@ onMounted(() => {
     { threshold: 0.7 },
   )
   wrapper.value && observer.observe(wrapper.value)
+
+  // Initially show controls for a bit when mounted
+  showControls()
 })
 
 watch(
@@ -326,6 +385,8 @@ onBeforeUnmount(() => {
   if (wrapper.value && observer) {
     observer.unobserve(wrapper.value)
   }
+  clearTimeout(controlsTimeout) // Clear any pending timeout
+  clearTimeout(tapTimeout) // Clear any pending tap timeout
 
   if (hls) {
     hls.destroy()
@@ -383,11 +444,17 @@ video {
   color: white;
 }
 
-.mute-icon {
-  bottom: 10%;
-  right: 10%;
+/* New style for the mute toggle button */
+.mute-toggle-btn {
+  bottom: 10px; /* Adjust as needed */
+  right: 10px; /* Adjust as needed */
   top: auto;
   left: auto;
-  transform: none;
+  transform: none; /* Remove translation from generic overlay */
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 50%;
+  padding: 4px;
+  transition: opacity 0.3s ease-in-out;
 }
 </style>
