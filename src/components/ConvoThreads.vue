@@ -1,5 +1,5 @@
 <template>
-  <div id="chatBubbleScrollArea" ref="chatContainer" class="q-pa-sm chat-container">
+  <div :style="$q.screen.lt.md?'height: calc(100dvh - 60px);':''" id="chatBubbleScrollArea" ref="chatContainer" class="q-pa-sm chat-container">
     <q-virtual-scroll
       ref="virtualScroll"
       scroll-target="#chatBubbleScrollArea"
@@ -591,7 +591,7 @@ onMounted(() => {
 <style scoped>
 .chat-container {
   overflow-y: scroll;
-  max-height: calc(100dvh - 60px);
+  height: calc(100dvh - 130px);
   padding-bottom: 70px;
 }
 

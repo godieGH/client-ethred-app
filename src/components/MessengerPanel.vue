@@ -24,6 +24,7 @@
 
     <div
       class="col-12 col-md-8 chat-column"
+      :style="$q.screen.lt.md?'height: 100dvh;':''"
       :class="{ 'full-screen-on-mobile': showChatOnMobile }"
       v-show="$q.screen.gt.sm || showChatOnMobile"
     >
@@ -75,17 +76,17 @@
         </div>
       </div>
 
-      <div style="position: relative">
+      <div style="position: relative;">
         <ConvoThreads :currentConversation="currentConversation" />
-        <div style="position: absolute; bottom: 0; right: 0; width: 100%">
+        <div style="position: absolute; bottom: 0; right: 0;width: 100%">
           <MessengerInput :currentConversation="currentConversation" />
         </div>
       </div>
     </div>
   </div>
 
-  <q-dialog v-model="showUserSelectionModal" persistent full-width>
-    <q-card class="user-selection-modal-card">
+  <q-dialog v-model="showUserSelectionModal" persistent>
+    <q-card style="max-width: 600px;" class="user-selection-modal-card">
       <q-card-section style="overflow: visible" class="row items-center q-pb-none">
         <div class="text-h6">{{ modalTitle }}</div>
         <q-space />
@@ -199,7 +200,7 @@
           {{ selectedUsers.length }} of {{ AllPeopleToDM.length }} users selected
         </div>
         <q-btn
-          label="Start Chat"
+          label="Start"
           :loading="loadingStartMsg"
           color="primary"
           icon="chat"
@@ -287,7 +288,7 @@ async function selectConversation(conversationId, type) {
         //console.log(currentConversation.value, data)
         currentUserToDisplay.value = { ...data }
         $q.loading.hide()
-        showChatOnMobile.value = true
+        showChatOnMobile.value = $q.screen.lt.md?true:false
       } catch (err) {
         console.log(err.message)
       }
@@ -441,7 +442,7 @@ async function startChat(type) {
     if (data) {
       currentConversation.value = { ...data }
       showUserSelectionModal.value = false
-      showChatOnMobile.value = true
+      showChatOnMobile.value = $q.screen.lt.md?true:false
     }
   } catch (err) {
     console.log(err.message)
@@ -464,6 +465,7 @@ onUnmounted(() => {
   position: relative; /* Essential for FAB positioning */
   display: flex; /* Use flexbox to manage internal height */
   flex-direction: column; /* Stack children vertically */
+  height: calc(100dvh - 70px);
 }
 
 /* Your existing mobile hiding logic for the conversation list */
@@ -478,6 +480,7 @@ onUnmounted(() => {
   position: relative; /* Reset these if they were causing issues */
   z-index: auto;
   overflow: hidden;
+  height: calc(100dvh - 70px);
 }
 
 .full-screen-on-mobile {
@@ -522,10 +525,6 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  box-shadow:
-    0 3px 5px -1px rgba(0, 0, 0, 0.2),
-    0 6px 10px 0 rgba(0, 0, 0, 0.14),
-    0 1px 18px 0 rgba(0, 0, 0, 0.12);
   transition: transform 0.3s ease-in-out;
   font-size: 24px;
 }

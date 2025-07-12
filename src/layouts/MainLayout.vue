@@ -213,8 +213,8 @@
           @click="() => (showMessenger = true)"
         />
 
-        <q-dialog maximized full-height full-width v-model="showMessenger">
-          <q-card class="q-pa-sm" style="overflow-y: hidden">
+        <q-dialog maximized v-model="showMessenger">
+          <q-card class="q-pa-sm" style="overflow-y: hidden; max-width: 1200px;">
             <div>
               <div style="display: flex; align-items: center">
                 <i v-close-popup class="q-pr-sm fas fa-chevron-left"></i>
