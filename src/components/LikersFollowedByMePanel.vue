@@ -47,13 +47,8 @@
     </q-item>
   </div>
 
-  <q-dialog
-    v-model="showDrawer"
-    :maximized="true"
-    position="bottom"
-    transition-show="slide-up"
-  >
-    <q-card style="max-width: 800px;" :style="`height: ${$q.screen.height}px;`">
+  <q-dialog v-model="showDrawer" :maximized="true" position="bottom" transition-show="slide-up">
+    <q-card style="max-width: 800px" :style="`height: ${$q.screen.height}px;`">
       <div class="q-mt-md" style="position: sticky; top: 0; z-index: 1; padding: 8px">
         <q-btn flat round icon="close" @click="showDrawer = false" />
         <span style="margin-left: 8px">Profile</span>
@@ -93,6 +88,7 @@ function PreviewUser(id) {
 async function fetchLikers() {
   loading.value = true
   noItem.value = false
+
   try {
     const { data } = await api.get(`/posts/${post_id}/likers/followed`)
     if (!data || data.length === 0) {

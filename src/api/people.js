@@ -37,14 +37,14 @@ export async function getUsers(limit = 20, cursor = null) {
   }
 }
 
-export function followUser(id) {
+export async function followUser(id) {
   return api.post(`/users/${id}/follow`)
 }
 
-export function unfollowUser(id) {
+export async function unfollowUser(id) {
   return api.delete(`/users/${id}/follow`)
 }
 
-export function getProfileCounts() {
+export async function getProfileCounts() {
   return api.get(`/users/profile/counts`)
 }

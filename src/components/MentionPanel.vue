@@ -33,13 +33,8 @@
     </q-item>
   </div>
 
-  <q-dialog
-    v-model="showDrawer"
-    :maximized="true"
-    position="bottom"
-    transition-show="slide-up"
-  >
-    <q-card style="max-width: 800px;" :style="`height: ${$q.screen.height}px;`">
+  <q-dialog v-model="showDrawer" :maximized="true" position="bottom" transition-show="slide-up">
+    <q-card style="max-width: 800px" :style="`height: ${$q.screen.height}px;`">
       <div class="q-mt-md" style="position: sticky; top: 0; z-index: 1; padding: 8px">
         <q-btn flat round icon="close" @click="showDrawer = false" />
         <span style="margin-left: 8px">Profile</span>
@@ -76,6 +71,7 @@ const loading = ref(false)
 
 onMounted(async () => {
   loading.value = true
+
   try {
     mentionTags.forEach(async (val) => {
       const { data } = await api.get(`/posts/mentioned/user/${val.id}/`)

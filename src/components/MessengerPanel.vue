@@ -22,71 +22,75 @@
       </div>
     </div>
 
-    <div
-      class="col-12 col-md-8 chat-column"
-      :style="$q.screen.lt.md?'height: 100dvh;':''"
-      :class="{ 'full-screen-on-mobile': showChatOnMobile }"
-      v-show="$q.screen.gt.sm || showChatOnMobile"
-    >
+    <transition name="slide-left-mobile">
       <div
-        class="q-pa-sm"
-        :style="$q.dark.isActive ? 'background: grey;' : 'background: white;'"
-        v-if="$q.screen.lt.md && showChatOnMobile"
+        class="col-12 col-md-8 chat-column"
+        :style="$q.screen.lt.md ? 'height: 100dvh;' : ''"
+        :class="{ 'full-screen-on-mobile': showChatOnMobile }"
+        v-show="$q.screen.gt.sm || showChatOnMobile"
       >
-        <div style="display: flex; align-items: center">
-          <i @click="hideChat()" class="q-pr-sm fas fa-chevron-left"></i>
-          <q-skeleton v-if="!currentUserToDisplay" type="circle" size="45px" />
-          <q-avatar v-else size="45px">
-            <img :src="getAvatarSrc(currentUserToDisplay.avatar)" />
-          </q-avatar>
-          <q-skeleton
-            v-if="!currentUserToDisplay"
-            class="q-ml-sm"
-            type="text"
-            height="20px"
-            width="100px"
-          />
-          <span v-else class="q-ml-sm text-grey">
-            <span v-if="currentConversation.type === 'private'"
-              >@{{ currentUserToDisplay.username }}</span
-            >
-            <span v-else>{{ currentUserToDisplay.groupName }}</span>
-          </span>
-        </div>
-      </div>
-      <div class="q-pa-sm" v-else>
-        <div style="display: flex; align-items: center">
-          <q-skeleton v-if="!currentUserToDisplay" type="circle" size="45px" />
-          <q-avatar v-else size="45px">
-            <img :src="getAvatarSrc(currentUserToDisplay.avatar)" />
-          </q-avatar>
-          <q-skeleton
-            v-if="!currentUserToDisplay"
-            class="q-ml-sm"
-            type="text"
-            height="20px"
-            width="100px"
-          />
-          <span v-else class="q-ml-sm text-grey">
-            <span v-if="currentConversation.type === 'private'"
-              >@{{ currentUserToDisplay.username }}</span
-            >
-            <span v-else>{{ currentUserToDisplay.groupName }}</span>
-          </span>
-        </div>
-      </div>
+        <div v-if="showThreads">
+          <div
+            class="q-pa-sm"
+            :style="$q.dark.isActive ? 'background: grey;' : 'background: white;'"
+            v-if="$q.screen.lt.md && showChatOnMobile"
+          >
+            <div style="display: flex; align-items: center">
+              <i @click="hideChat()" class="q-pr-sm fas fa-chevron-left"></i>
+              <q-skeleton v-if="!currentUserToDisplay" type="circle" size="45px" />
+              <q-avatar v-else size="45px">
+                <img :src="getAvatarSrc(currentUserToDisplay.avatar)" />
+              </q-avatar>
+              <q-skeleton
+                v-if="!currentUserToDisplay"
+                class="q-ml-sm"
+                type="text"
+                height="20px"
+                width="100px"
+              />
+              <span v-else class="q-ml-sm text-grey">
+                <span v-if="currentConversation.type === 'private'"
+                  >@{{ currentUserToDisplay.username }}</span
+                >
+                <span v-else>{{ currentUserToDisplay.groupName }}</span>
+              </span>
+            </div>
+          </div>
+          <div class="q-pa-sm" v-else>
+            <div style="display: flex; align-items: center">
+              <q-skeleton v-if="!currentUserToDisplay" type="circle" size="45px" />
+              <q-avatar v-else size="45px">
+                <img :src="getAvatarSrc(currentUserToDisplay.avatar)" />
+              </q-avatar>
+              <q-skeleton
+                v-if="!currentUserToDisplay"
+                class="q-ml-sm"
+                type="text"
+                height="20px"
+                width="100px"
+              />
+              <span v-else class="q-ml-sm text-grey">
+                <span v-if="currentConversation.type === 'private'"
+                  >@{{ currentUserToDisplay.username }}</span
+                >
+                <span v-else>{{ currentUserToDisplay.groupName }}</span>
+              </span>
+            </div>
+          </div>
 
-      <div style="position: relative;">
-        <ConvoThreads :currentConversation="currentConversation" />
-        <div style="position: absolute; bottom: 0; right: 0;width: 100%">
-          <MessengerInput :currentConversation="currentConversation" />
+          <div style="position: relative">
+            <ConvoThreads :currentConversation="currentConversation" />
+            <div style="position: absolute; bottom: 0; right: 0; width: 100%">
+              <MessengerInput :currentConversation="currentConversation" />
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+    </transition>
   </div>
 
   <q-dialog v-model="showUserSelectionModal" persistent>
-    <q-card style="max-width: 600px;" class="user-selection-modal-card">
+    <q-card style="max-width: 600px" class="user-selection-modal-card">
       <q-card-section style="overflow: visible" class="row items-center q-pb-none">
         <div class="text-h6">{{ modalTitle }}</div>
         <q-space />
@@ -120,10 +124,9 @@
                 <q-item-label>
                   <q-skeleton type="text" width="80px" />
                 </q-item-label>
-                <q-item-label caption>
+                <q-item-label caption/>
                   <q-skeleton type="text" width="120px" />
-                </q-item-label>
-              </q-item-section>
+                </q-item-section>
               <q-item-section side>
                 <q-btn
                   v-if="modalTitle === 'Create Group Chat'"
@@ -225,6 +228,7 @@ import { getAvatarSrc } from 'src/composables/formater'
 import { ref, watch, onUnmounted } from 'vue'
 import { useQuasar } from 'quasar'
 import { api } from 'boot/axios'
+//import { socket } from "boot/socket"
 
 const $q = useQuasar()
 const showChatOnMobile = ref(false)
@@ -239,6 +243,7 @@ const loadingStartMsg = ref(false)
 
 const currentConversation = ref({})
 const currentUserToDisplay = ref(null)
+const showThreads = ref(false)
 
 watch(currentConversation, async (newConvo) => {
   if (newConvo.type === 'private') {
@@ -269,6 +274,7 @@ watch(
 )
 
 async function selectConversation(conversationId, type) {
+  showThreads.value = false
   currentConversation.value = {}
   $q.loading.show({
     delay: 400,
@@ -288,7 +294,13 @@ async function selectConversation(conversationId, type) {
         //console.log(currentConversation.value, data)
         currentUserToDisplay.value = { ...data }
         $q.loading.hide()
-        showChatOnMobile.value = $q.screen.lt.md?true:false
+        showThreads.value = true
+        // Only trigger the animation on mobile screens
+        if ($q.screen.lt.md) {
+          showChatOnMobile.value = true
+        } else {
+          showChatOnMobile.value = false
+        }
       } catch (err) {
         console.log(err.message)
       }
@@ -300,6 +312,7 @@ async function selectConversation(conversationId, type) {
 
 function hideChat() {
   showChatOnMobile.value = false
+  showThreads.value = false
 }
 
 function toggleFabActions() {
@@ -330,6 +343,7 @@ async function fetchAllPeopleToDM() {
   noSearchItem.value = false
   people.value = []
   AllPeopleToDM.value = []
+
   try {
     const { data } = await api.get('/api/all/people/to/dm')
     if (data.length === 0) {
@@ -433,6 +447,8 @@ function addMembers(id) {
 }
 
 async function startChat(type) {
+  showThreads.value = false
+
   try {
     const { data } = await api.post('api/start/a/chart', {
       participants: selectedUsers.value,
@@ -442,7 +458,13 @@ async function startChat(type) {
     if (data) {
       currentConversation.value = { ...data }
       showUserSelectionModal.value = false
-      showChatOnMobile.value = $q.screen.lt.md?true:false
+      // Only trigger the animation on mobile screens
+      if ($q.screen.lt.md) {
+        showChatOnMobile.value = true
+      } else {
+        showChatOnMobile.value = false
+      }
+      showThreads.value = true
     }
   } catch (err) {
     console.log(err.message)
@@ -595,5 +617,31 @@ onUnmounted(() => {
   max-height: 80vh; /* Make it responsive */
   display: flex;
   flex-direction: column;
+}
+
+/* New CSS for slide-left-mobile transition */
+.slide-left-mobile-enter-active,
+.slide-left-mobile-leave-active {
+  transition: transform 0.3s ease-out;
+}
+
+.slide-left-mobile-enter-from {
+  transform: translateX(100%);
+}
+
+.slide-left-mobile-leave-to {
+  transform: translateX(100%);
+}
+
+@media (min-width: 1024px) {
+  .slide-left-mobile-enter-active,
+  .slide-left-mobile-leave-active {
+    transition: none; /* Disable transition on desktop */
+  }
+
+  .slide-left-mobile-enter-from,
+  .slide-left-mobile-leave-to {
+    transform: translateX(0) !important; /* Ensure no transform on desktop */
+  }
 }
 </style>

@@ -77,7 +77,7 @@
 <script setup>
 import { getAvatarSrc } from '../composables/formater'
 import { useQuasar } from 'quasar'
-import { api } from 'boot/axios'
+//import { api } from 'boot/axios'
 import { EventBus } from 'boot/event-bus'
 
 const props = defineProps({
@@ -93,6 +93,7 @@ const shareUrl = `${process.env.VITE_API_BASE_URL}/post/${props.post.id}` // Or 
 const shareText = `Check out this ${props.post.type + ' post' || 'post'} by @${props.post.user.username}: ${shareUrl}`
 
 const recordShare = async (shareType) => {
+  const { api } = await import('boot/axios')
   try {
     await api.post(`/api/share/post/${props.post.id}/type/${shareType}/`)
     //console.log(`✅ Recorded share: ${shareType}`)

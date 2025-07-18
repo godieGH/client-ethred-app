@@ -281,20 +281,19 @@ async function loadHlsVideo() {
     hls.destroy()
     hls = null
   }
-  
+
   // Dynamically import Hls.js here
-  let HlsModule;
+  let HlsModule
   try {
-    HlsModule = (await import('hls.js'));
+    HlsModule = await import('hls.js')
   } catch (error) {
-    console.error("Failed to load hls.js:", error);
-    initialLoading.value = false;
+    console.error('Failed to load hls.js:', error)
+    initialLoading.value = false
     // Handle gracefully, perhaps show an error message to the user
-    return; // Stop execution if hls.js can't be loaded
+    return // Stop execution if hls.js can't be loaded
   }
 
-  const Hls = HlsModule.default; // Get the default export
-
+  const Hls = HlsModule.default // Get the default export
 
   if (video.value && Hls.isSupported()) {
     hls = new Hls()

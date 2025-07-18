@@ -1,5 +1,10 @@
 <template>
-  <div :style="$q.screen.lt.md?'height: calc(100dvh - 60px);':''" id="chatBubbleScrollArea" ref="chatContainer" class="q-pa-sm chat-container">
+  <div
+    :style="$q.screen.lt.md ? 'height: calc(100dvh - 60px);' : ''"
+    id="chatBubbleScrollArea"
+    ref="chatContainer"
+    class="q-pa-sm chat-container"
+  >
     <q-virtual-scroll
       ref="virtualScroll"
       scroll-target="#chatBubbleScrollArea"
@@ -7,9 +12,16 @@
       v-slot="{ item: message }"
       virtual-scroll-item-size="35"
     >
-      <div :key="message._id">
+      <div :key="message.id">
         <div
-          v-if="message.sender_type === 'system'"
+          v-if="message.type === 'date_separator'"
+          class="message-system text-center text-caption text-grey-6"
+        >
+          {{ date.formatDate(new Date(message.date), 'Do MMMM YYYY') }}
+        </div>
+
+        <div
+          v-else-if="message.sender_type === 'system'"
           class="message-system text-center text-caption text-grey-6"
         >
           {{ message.content.text }}
@@ -21,7 +33,7 @@
           class="row items-start no-wrap"
         >
           <q-avatar v-if="!message.isMine && message.showAvatar && !message.is_deleted" size="md">
-            <img :src="message.sender.avatar || 'default.png'" />
+            <img :src="getAvatarSrc(message.sender.avatar) || 'default.png'" />
           </q-avatar>
           <div
             v-else-if="!message.isMine && !message.showAvatar"
@@ -56,30 +68,101 @@
               </div>
             </div>
 
-            <div v-if="message.content.text" :class="{ 'text-grey': message.is_deleted }">
-              <span v-if="message.is_deleted && !message.isMine">
-                <span class="material-icons">do_not_disturb</span> This message was deleted.
-              </span>
-              <span v-else>
-                {{ message.content.text }}
-              </span>
-            </div>
-            <div v-if="message.content.attachment_type === 'image'">
+            <div
+              v-if="message.content.attachment_type === 'image'"
+              style="position: relative"
+              :style="{ 'width': '220px', 'height': `calc(220px * ${message.content.attachment_metadata?.height} / ${message.content.attachment_metadata?.width} )` }"
+              class="attachment-top"
+            >
+              <div
+                v-if="message.queued && message.isMine"
+                class="attachment-queued-overlay"
+              >
+                <q-btn flat size="30px" style="color: white" loading></q-btn>
+              </div>
               <q-img :src="message.content.attachment" class="message-image" />
             </div>
-            <div v-if="message.content.attachment_type === 'video'">
+
+            <div
+              v-if="message.content.attachment_type === 'video'"
+              style="position: relative"
+              :style="{ 'width': '220px', 'height': `calc(220px * ${message.content.attachment_metadata?.height} / ${message.content.attachment_metadata?.width})` }"
+              class="attachment-top"
+            >
+              <div
+                v-if="message.queued && message.isMine"
+                class="attachment-queued-overlay"
+              >
+                <q-btn flat size="30px" style="color: white" loading></q-btn>
+              </div>
               <CustomVideoPlayer :src="message.content.attachment" />
             </div>
-            <div v-if="message.content.voice_note">
+
+            <div v-if="message.content.attachment_type === 'file'" class="file-type-attachment attachment-top">
+              <div class="file-icon">
+                <q-icon
+                  :name="getIconForFileType(message.content.attachment_metadata)"
+                  :style="{
+                    'font-size': '25px',
+                    color: getIconColorForFileType(message.content.attachment_metadata),
+                  }"
+                  class="icons"
+                />
+              </div>
+              <div class="file-meta">
+                <div class="file-name">
+                  {{
+                    message.content.attachment?.split('/')[
+                      message.content.attachment?.split('/').length - 1
+                    ]
+                  }}
+                </div>
+                <div class="meta">
+                  <span>
+                    {{
+                      message.content.attachment_metadata?.pages
+                        ? `${message.content.attachment_metadata?.pages} pages • `
+                        : message.content.attachment_metadata?.duration
+                          ? `${Math.trunc(message.content.attachment_metadata?.duration)}s • `
+                          : '   '
+                    }}
+                  </span>
+
+                  <span>{{ formatFileSize(message.content.attachment_metadata?.size) }} • </span>
+                  <span>
+                    {{
+                      message.content.attachment_metadata?.type === 'document' ||
+                      message.content.attachment_metadata?.type === 'application'
+                        ? message.content.attachment_metadata?.subtype
+                        : message.content.attachment_metadata?.type === 'video' ||
+                          message.content.attachment_metadata?.type === 'image' ||
+                          message.content.attachment_metadata?.type === 'audio' ||
+                          message.content.attachment_metadata?.type === 'text'
+                          ? message.content.attachment_metadata?.mime_type.split('/')[1]
+                          : ''
+                    }}
+                  </span>
+                </div>
+              </div>
+              <div class="download-icon">
+                <span>
+                  <q-icon v-if="message.isMine && message.queued" name="file_upload" style="font-size: 20px" class="icons" />
+                  <q-icon v-else-if="!message.isMine" name="file_download" style="font-size: 20px" class="icons" />
+                  <q-icon v-else name="done" style="font-size: 20px" class="icons" />
+                </span>
+              </div>
+            </div>
+
+            <div v-if="message.content.voice_note" class="attachment-top">
               <div class="voice-note-player row items-center no-wrap q-gutter-xs">
                 <q-btn
                   :icon="
-                    currentPlayingVoiceNoteId === message._id && isPlaying ? 'pause' : 'play_arrow'
+                    currentPlayingVoiceNoteId === message.id && isPlaying ? 'pause' : 'play_arrow'
                   "
                   flat
                   dense
                   round
-                  @click="toggleVoiceNotePlay(message._id, message.content.voice_note)"
+                  @click="toggleVoiceNotePlay(message.id, message.content.voice_note)"
                 />
                 <div
                   class="voice-note-waveform"
@@ -89,10 +172,10 @@
                     backgroundColor: '#e0e0e0',
                     borderRadius: '5px',
                   }"
-                  @click="seekVoiceNote($event, message._id)"
+                  @click="seekVoiceNote($event, message.id)"
                 >
                   <div
-                    v-if="currentPlayingVoiceNoteId === message._id"
+                    v-if="currentPlayingVoiceNoteId === message.id"
                     class="waveform-progress"
                     :style="{ width: voiceNoteProgress + '%' }"
                   ></div>
@@ -100,19 +183,29 @@
                 </div>
                 <div style="font-size: 10px" class="voice-note-time text-caption text-grey-6">
                   {{
-                    currentPlayingVoiceNoteId === message._id
+                    currentPlayingVoiceNoteId === message.id
                       ? formatDuration(voiceNoteCurrentTime)
-                      : formatDuration(voiceNoteDurations[message._id] || 0)
+                      : formatDuration(voiceNoteDurations[message.id] || 0)
                   }}
-                  | {{ formatDuration(voiceNoteDurations[message._id] || 0) }}
+                  | {{ formatDuration(voiceNoteDurations[message.id] || 0) }}
                 </div>
               </div>
             </div>
+
+            <div v-if="message.content.text" :class="{ 'text-grey': message.is_deleted }" class="message-text-content">
+              <span v-if="message.is_deleted && !message.isMine">
+                <span class="material-icons">do_not_disturb</span> This message was deleted.
+              </span>
+              <span style="white-space: pre-wrap;" v-else>
+                {{ message.content.text }}
+              </span>
+            </div>
+
             <div
               v-if="!message.is_deleted"
               :class="message.isMine ? 'text-right' : 'text-left'"
               style="font-size: 10px"
-              class="text-caption text-grey-5"
+              class="text-caption text-grey-5 message-timestamp"
             >
               <span
                 v-if="message.isMine && message.queued"
@@ -145,290 +238,100 @@
 
 <script setup>
 import CustomVideoPlayer from 'components/VideoPlayer.vue'
-import { ref, computed, onUnmounted, watch, onMounted, nextTick } from 'vue' // Import watch and onMounted
+import { ref, computed, onUnmounted, watch, onMounted, nextTick } from 'vue'
+import { socket } from "boot/socket"
+import { api } from "boot/axios"
 import { date } from 'quasar'
+import { useUserStore } from 'stores/user'
+import { useMessageStore } from 'stores/messageStore'
+import { formatFileSize, getAvatarSrc } from 'src/composables/formater'
 
+const messageStore = useMessageStore()
 const props = defineProps({
   currentConversation: Object,
 })
+const userStore = useUserStore()
+
+const messages = ref([])
+
+async function fetchHistMsg() {
+  try {
+    const { data } = await api.get(`/api/get/msgs/${props.currentConversation.id}/`)
+    messages.value = [...data]
+    //console.log(data)
+  } catch (err) {
+    console.error(err.message)
+  }
+}
 
 watch(
-  () => props.currentConversation,
-  (a) => {
-    //console.log(a)
-    void a
+  messageStore.queued,
+  (newMsgs) => {
+    //console.log(newMsgs)
+    if (newMsgs.length > 0) {
+      const queuedMsgs = messageStore.queued.filter(msg => {
+        return msg.conversation_id === props.currentConversation.id
+      })
+      messages.value = [...new Set([...messages.value, ...queuedMsgs])]
+    }
   },
+  { deep: true },
 )
 
-const messages = ref([
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 21,
-    sender: { id: 21, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there!',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707000,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: true,
-    read_by: [{ id: 21 }],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there!',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there!',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: true,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: true,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: true,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: true,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: true,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 22,
-    sender: { id: 22, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: true,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: false,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 21,
-    sender: { id: 21, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: true,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 21,
-    sender: { id: 21, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: true,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 21,
-    sender: { id: 21, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: true,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 21,
-    sender: { id: 21, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: true,
-    read_by: [],
-  },
-  {
-    _id: 1,
-    conversation_id: 30,
-    sender_id: 21,
-    sender: { id: 21, name: 'Alice', avatar: '/uploads/avatar-2-1750627228592.jpg' },
-    sender_type: 'user',
-    content: {
-      text: 'Hello there! sjsjissjebe ehej',
-      attachment: null,
-      attachment_type: null,
-      voice_note: null,
-    },
-    sent_at: 1751334707070,
-    is_deleted: false,
-    is_edited: false,
-    reply_to_message: null,
-    isMine: true,
-    read_by: [],
-    queued: true,
-  },
-])
+
+onMounted(async () => {
+  await fetchHistMsg()
+
+  if (messageStore.queued.length > 0) {
+    const queuedMsgs = messageStore.queued.filter(msg => {
+      return msg.conversation_id === props.currentConversation.id
+    })
+
+    //console.log(queuedMsgs)
+    messages.value = [...new Set([...messages.value, ...queuedMsgs])]
+  }
+
+
+  socket.on('new_msg', recieveNew);
+})
+
+
+async function recieveNew(msg) { // Use 'async' because we'll await inside
+  if (msg.conversation_id !== props.currentConversation.id) return;
+
+  const newMsg = {
+    id: msg.id,
+    conversation_id: msg.conversation_id,
+    // sender will be populated after the API call
+    sender_id: msg.sender_id,
+    sender_type: msg.sender_type,
+    content: msg.content,
+    sent_at: msg.sent_at,
+    updated_at: msg.updated_at,
+    isMine: msg.sender_id === userStore.user.id,
+    is_deleted: msg.is_deleted,
+    is_edited: msg.is_edited,
+  };
+
+  try {
+    // Fetch sender details only if it's a user message
+    if (msg.sender_type === 'user') {
+      const senderResponse = await api.get(`/api/get/user/${msg.sender_id}`);
+      newMsg.sender = senderResponse.data; // Assuming your API returns data in .data
+    }
+  } catch (error) {
+    console.error('Error fetching sender details:', error);
+    newMsg.sender = null; // Or some default error state
+  }
+
+  // If it's a system message with content.type === "initial_msg", push to the beginning
+  if (newMsg.sender_type === 'system' && newMsg.content && newMsg.content.type === 'initial_msg') {
+    messages.value.unshift(newMsg);
+  } else {
+    messages.value.push(newMsg);
+  }
+}
+
 
 const virtualScroll = ref(null)
 const chatContainer = ref(null)
@@ -445,6 +348,9 @@ const formatTime = (timestamp) => {
 }
 
 const formatDuration = (seconds) => {
+  if (isNaN(seconds) || !isFinite(seconds)) {
+    return '00:00' // Handle NaN or Infinity durations
+  }
   const minutes = Math.floor(seconds / 60)
   const remainingSeconds = Math.floor(seconds % 60)
   return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
@@ -488,9 +394,35 @@ const toggleVoiceNotePlay = async (messageId, url) => {
     })
 
     currentAudio.value.addEventListener('loadedmetadata', () => {
+      // Ensure duration is a valid number before storing
+      const duration = currentAudio.value.duration
+      if (!isNaN(duration) && isFinite(duration)) {
+        voiceNoteDurations.value = {
+          ...voiceNoteDurations.value,
+          [messageId]: duration,
+        }
+      } else {
+        console.warn(
+          `Could not get valid duration for voice note ${messageId}. Duration: ${duration}`,
+        )
+        voiceNoteDurations.value = {
+          ...voiceNoteDurations.value,
+          [messageId]: 0, // Set to 0 or a sensible default
+        }
+      }
+    })
+
+    // Handle potential errors when loading the audio
+    currentAudio.value.addEventListener('error', (e) => {
+      console.error('Error loading audio:', e)
+      // You might want to display an error message to the user
+      isPlaying.value = false
+      currentPlayingVoiceNoteId.value = null
+      voiceNoteCurrentTime.value = 0
+      voiceNoteProgress.value = 0
       voiceNoteDurations.value = {
         ...voiceNoteDurations.value,
-        [messageId]: currentAudio.value.duration,
+        [messageId]: 0, // Reset duration
       }
     })
 
@@ -499,8 +431,12 @@ const toggleVoiceNotePlay = async (messageId, url) => {
 }
 
 const seekVoiceNote = (event, messageId) => {
-  if (!voiceNoteDurations.value[messageId]) {
-    // Cannot seek if duration is not known yet
+  // Add a check to ensure the duration is valid before seeking
+  if (
+    isNaN(voiceNoteDurations.value[messageId]) ||
+    !isFinite(voiceNoteDurations.value[messageId])
+  ) {
+    console.warn(`Cannot seek voice note ${messageId}: duration is invalid.`)
     return
   }
 
@@ -515,7 +451,7 @@ const seekVoiceNote = (event, messageId) => {
     currentAudio.value.currentTime = seekTime
   } else {
     // If not currently playing, start playing from the seeked position
-    const message = messages.value.find((msg) => msg._id === messageId)
+    const message = messages.value.find((msg) => msg.id === messageId)
     if (message && message.content.voice_note) {
       toggleVoiceNotePlay(messageId, message.content.voice_note).then(() => {
         if (currentAudio.value) {
@@ -531,39 +467,52 @@ onUnmounted(() => {
     currentAudio.value.pause()
     currentAudio.value = null
   }
+  socket.off('new_msg', recieveNew);
 })
 
 const groupedMessages = computed(() => {
   if (!messages.value || messages.value.length === 0) {
-    return []
+    return [];
   }
 
-  const processedMessages = []
-  for (let i = 0; i < messages.value.length; i++) {
-    const currentMessage = { ...messages.value[i] } // Create a copy to avoid direct mutation
-    let showAvatar = false
+  const processed = [];
+  let lastDate = null; // To keep track of the last message's date
 
-    // Determine if avatar should be shown
-    if (currentMessage.sender_type === 'system') {
-      showAvatar = false // System messages don't have avatars
-    } else if (i === 0) {
-      showAvatar = true // Always show avatar for the first message
-    } else {
-      const previousMessage = messages.value[i - 1]
-      // Show avatar if sender changes or if previous message was a system message
-      if (
-        currentMessage.sender_id !== previousMessage.sender_id ||
-        previousMessage.sender_type === 'system' ||
-        previousMessage.is_deleted
-      ) {
-        showAvatar = true
-      }
+  // Sort messages to ensure they are in chronological order before processing
+  const sortedMessages = [...messages.value].sort((a, b) => new Date(a.sent_at) - new Date(b.sent_at));
+
+  for (let i = 0; i < sortedMessages.length; i++) {
+    const currentMessage = { ...sortedMessages[i] }; // Create a copy
+
+    // 1. Add Date Separator if needed
+    const currentMessageDate = date.formatDate(currentMessage.sent_at, 'YYYY-MM-DD');
+    if (currentMessageDate !== lastDate) {
+      processed.push({
+        id: `separator-${currentMessageDate}`, // Unique ID for the separator
+        type: 'date_separator',
+        date: currentMessage.sent_at,
+      });
+      lastDate = currentMessageDate;
     }
-    currentMessage.showAvatar = showAvatar
-    processedMessages.push(currentMessage)
+
+    // 2. Add Avatar visibility logic
+    if (currentMessage.sender_type === 'user') {
+      let showAvatar = false;
+      const previousMessage = i > 0 ? sortedMessages[i - 1] : null;
+
+      // Show avatar if it's the first message, or if the sender is different from the previous one.
+      // Also ensure avatar shows if the previous message was a system message.
+      if (!previousMessage || currentMessage.sender_id !== previousMessage.sender_id || previousMessage.sender_type === 'system') {
+        showAvatar = true;
+      }
+      currentMessage.showAvatar = showAvatar;
+    }
+
+    processed.push(currentMessage);
   }
-  return processedMessages
-})
+
+  return processed;
+});
 
 const scrollToBottom = () => {
   if (virtualScroll.value && groupedMessages.value.length > 0) {
@@ -582,13 +531,145 @@ watch(
 )
 
 onMounted(() => {
+  void props.currentConversation
   nextTick(() => {
     scrollToBottom()
   })
 })
+
+const getIconForFileType = (metadata) => {
+  if (!metadata) {
+    return 'far fa-file';
+  }
+
+  const {
+    type,
+    subtype,
+    mime_type
+  } = metadata;
+
+  switch (type) {
+    case 'image':
+      return 'fas fa-file-image';
+    case 'video':
+      return 'fas fa-file-video';
+    case 'audio':
+      return 'fas fa-file-audio';
+    case 'document':
+    case 'application':
+      if (subtype === 'pdf' || mime_type === 'application/pdf') {
+        return 'fas fa-file-pdf';
+      } else if (
+        subtype === 'word' ||
+        mime_type === 'application/msword' ||
+        mime_type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      ) {
+        return 'fas fa-file-word';
+      } else if (
+        subtype === 'excel' ||
+        mime_type === 'application/vnd.ms-excel' ||
+        mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ) {
+        return 'fas fa-file-excel';
+      } else if (
+        subtype === 'powerpoint' ||
+        mime_type === 'application/vnd.ms-powerpoint' ||
+        mime_type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      ) {
+        return 'fas fa-file-powerpoint';
+      } else if (
+        subtype === 'zip' ||
+        mime_type === 'application/zip' ||
+        mime_type === 'application/x-zip-compressed'
+      ) {
+        return 'fas fa-file-archive';
+      } else if (mime_type === 'text/csv') {
+        return 'fas fa-file-csv';
+      }
+      return 'fas fa-file-alt';
+    case 'text':
+      if (mime_type === 'text/plain') {
+        return 'fas fa-file-alt';
+      } else if (mime_type === 'text/html') {
+        return 'fas fa-file-code';
+      } else if (mime_type === 'text/css') {
+        return 'fas fa-file-code';
+      } else if (mime_type === 'text/javascript') {
+        return 'fas fa-file-code';
+      }
+      return 'fas fa-file-alt';
+    default:
+      return 'far fa-file';
+  }
+};
+
+const getIconColorForFileType = (metadata) => {
+  if (!metadata) {
+    return '#808080';
+  }
+
+  const {
+    type,
+    subtype,
+    mime_type
+  } = metadata;
+
+  const colorMap = {
+    pdf: '#E4002B',
+    word: '#2B579A',
+    excel: '#217346',
+    powerpoint: '#D24726',
+    zip: '#808080',
+    image: '#007ACC',
+    video: '#8A2BE2',
+    audio: '#00BFFF',
+    csv: '#217346',
+    html: '#E34F26',
+    css: '#1572B6',
+    javascript: '#F7DF1E',
+    text: '#808080',
+  };
+
+  if (subtype && colorMap[subtype]) {
+    return colorMap[subtype];
+  }
+  if (mime_type && mime_type.includes('pdf') && colorMap['pdf']) {
+    return colorMap['pdf'];
+  }
+  if (mime_type && mime_type.includes('wordprocessingml') && colorMap['word']) {
+    return colorMap['word'];
+  }
+  if (mime_type && mime_type.includes('spreadsheetml') && colorMap['excel']) {
+    return colorMap['excel'];
+  }
+  if (mime_type && mime_type.includes('presentationml') && colorMap['powerpoint']) {
+    return colorMap['powerpoint'];
+  }
+  if (mime_type && mime_type.includes('zip') && colorMap['zip']) {
+    return colorMap['zip'];
+  }
+  if (mime_type && mime_type.includes('csv') && colorMap['csv']) {
+    return colorMap['csv'];
+  }
+  if (mime_type && mime_type.includes('html') && colorMap['html']) {
+    return colorMap['html'];
+  }
+  if (mime_type && mime_type.includes('css') && colorMap['css']) {
+    return colorMap['css'];
+  }
+  if (mime_type && mime_type.includes('javascript') && colorMap['javascript']) {
+    return colorMap['javascript'];
+  }
+
+  if (type && colorMap[type]) {
+    return colorMap[type];
+  }
+
+  return '#808080';
+};
 </script>
 
-<style scoped>
+<style scoped lang="scss">
 .chat-container {
   overflow-y: scroll;
   height: calc(100dvh - 130px);
@@ -602,6 +683,9 @@ onMounted(() => {
   word-wrap: break-word; /* Ensure long words break */
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1); /* Subtle shadow */
   flex-shrink: 1; /* Allow bubble to shrink */
+  display: flex; /* Enable flexbox for ordering */
+  flex-direction: column; /* Stack items vertically */
+  gap: 5px; /* Add some spacing between elements inside the bubble */
 }
 
 /* My Messages */
@@ -633,20 +717,56 @@ onMounted(() => {
   padding: 5px 0;
 }
 
+/* Attachment Styles */
+.attachment-top {
+  margin-bottom: 0; /* Attachments should not have bottom margin when followed by text */
+  /* Remove margin-top on the elements themselves if message-bubble has gap */
+  & + .message-text-content {
+    margin-top: 5px; /* Add margin to the text if it follows an attachment */
+  }
+}
+
+.message-text-content {
+  /* This is the div containing the actual text */
+  flex-grow: 1; /* Allows text to take available space */
+}
+
+.message-timestamp {
+  margin-top: 0px; /* Adjust as needed for spacing after text/attachments */
+}
+
+
 /* Message attachments (images) */
 .message-image {
   max-width: 100%;
+  min-width: 200px;
   height: auto;
   border-radius: 8px;
-  margin-top: 5px;
+  /* margin-top: 5px; Removed due to flex gap */
 }
 
 .message-video {
   max-width: 100%;
   height: auto;
   border-radius: 8px;
-  margin-top: 5px;
+  /* margin-top: 5px; Removed due to flex gap */
 }
+
+.attachment-queued-overlay {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--q-primary);
+  z-index: 9999;
+  position: absolute;
+  top: 0;
+  opacity: 0.8;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 10px;
+}
+
 
 /* Reply Bubble Styles */
 .reply-bubble {
@@ -672,6 +792,7 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   min-width: 150px; /* Adjust as needed */
+  /* margin-bottom: 5px; Removed due to flex gap */
 }
 
 .voice-note-waveform {
@@ -707,4 +828,56 @@ onMounted(() => {
 .voice-note-time {
   white-space: nowrap;
 }
+
+.file-type-attachment {
+  display: flex;
+  flex-direction: row;
+  padding: 8px;
+  min-width: 220px;
+  border-radius: 10px;
+  /* margin-bottom: 5px; Removed due to flex gap */
+
+
+  .file-icon {
+    padding: 0 10px 0 0;
+  }
+  .file-icon,
+  .download-icon {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .download-icon {
+    flex-grow: 1;
+    margin-left: 20px;
+    .icons {
+      border-radius: 50px;
+      padding: 4px;
+    }
+
+    span {
+      border: 1px solid grey;
+      border-radius: 50px;
+    }
+  }
+
+  .file-meta {
+    flex-grow: 2;
+    .meta {
+      font-size: 10px;
+      color: grey;
+    }
+  }
+  .file-name {
+    font-size: 11px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
 </style>
+
+
+

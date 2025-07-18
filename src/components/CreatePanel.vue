@@ -257,7 +257,6 @@
 <script setup>
 import AudienceSelector from './misc/AudienceSelector.vue'
 import CategorySelector from './misc/CategorySelector.vue'
-
 import { api } from 'boot/axios'
 import { useRouter } from 'vue-router'
 import { onMounted, watch, ref, nextTick, computed } from 'vue'
@@ -352,6 +351,7 @@ async function onInput(e) {
     suggestions.value = []
     return
   }
+
   try {
     const { data } = await api.post('/users/search', { q })
     if (!data.length) {
@@ -528,9 +528,9 @@ function onKeydown(e) {
         //const username = suggestions.value[0].username
         mentions.value.push(suggestions.value[0])
         updateContent(val, current, area)
-        setTimeout(function() {
-           suggestions.value = []
-        }, 100);
+        setTimeout(function () {
+          suggestions.value = []
+        }, 100)
       }
       console.log(suggestions.value)
       console.log(mentions.value)
@@ -569,10 +569,10 @@ function addMention(u) {
   const current = words.pop()
   mentions.value.push(u)
   updateContent(val, current, area)
-  
-  setTimeout(function() {
-      suggestions.value = []
-   }, 100);
+
+  setTimeout(function () {
+    suggestions.value = []
+  }, 100)
 }
 
 function updateContent(val, token, area) {
@@ -744,7 +744,7 @@ function isVideo(src) {
   return false
 }
 
-import { io } from 'socket.io-client'
+import { socket } from 'boot/socket'
 
 async function submitPost() {
   if (
@@ -753,22 +753,11 @@ async function submitPost() {
     tags.value.length === 0 &&
     mentions.value.length === 0 &&
     links.value.length === 0
-  )
+  ) {
     return $q.notify({ message: 'Nothing to post', color: 'negative' })
+  }
 
   disableInput.value = true
-
-  // --- Initialize Socket.IO connection ---
-  // The URL should point to your backend server
-  const socket = io(import.meta.env.VITE_API_BASE_URL)
-
-  // --- Wait for the connection to be established ---
-  await new Promise((resolve) => {
-    socket.on('connect', () => {
-      //console.log('Connected to server with socket ID:', socket.id)
-      resolve()
-    })
-  })
 
   const notif = $q.notify({
     message: 'Uploading file...',
@@ -782,20 +771,27 @@ async function submitPost() {
   let originalMedia = null
   let thumbnailUrl = null
 
-  // --- Listen for general processing start events (HLS or WebM) ---
-  socket.on('processing_start', (data) => {
-    notif({ message: data.message, caption: '0%' }) // Update message to "Converting..." or "Optimizing..."
-  })
+  const processingStartListener = (data) => {
+    notif({ message: data.message, caption: '0%' })
+  }
 
-  // --- Listen for HLS progress events from the server ---
-  socket.on('hls_progress', (data) => {
+  const hlsProgressListener = (data) => {
     notif({ caption: `${data.percent}%` })
-  })
+  }
 
-  // --- Listen for WebM progress events from the server ---
-  socket.on('mp4_progress', (data) => {
+  const mp4ProgressListener = (data) => {
     notif({ caption: `${data.percent}%` })
-  })
+  }
+
+  socket.on('processing_start', processingStartListener)
+  socket.on('hls_progress', hlsProgressListener)
+  socket.on('mp4_progress', mp4ProgressListener)
+
+  const cleanupListeners = () => {
+    socket.off('processing_start', processingStartListener)
+    socket.off('hls_progress', hlsProgressListener)
+    socket.off('mp4_progress', mp4ProgressListener)
+  }
 
   if (postType.value !== 'text') {
     const formData = new FormData()
@@ -804,13 +800,10 @@ async function submitPost() {
       const response = await api.post('/posts/upload/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
-          // --- Send socket ID to the backend ---
           'X-Socket-ID': socket.id,
         },
         onUploadProgress: (progressEvent) => {
           const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          // Only update the upload progress if it's not yet 100%
-          // Once it hits 100%, the HLS/WebM progress will take over.
           if (percent < 100) {
             notif({ caption: `${percent}%` })
           } else {
@@ -829,18 +822,16 @@ async function submitPost() {
         timeout: 4000,
       })
       disableInput.value = false
-      socket.disconnect() // Disconnect socket on failure
+      cleanupListeners()
       return
     }
   }
 
-  // Disconnect the socket as it's no longer needed
-  socket.disconnect()
+  cleanupListeners()
 
   notif({ message: 'Creating post...' })
 
   const postObj = {
-    // ... your post object remains the same
     type: postType.value,
     body: postContent.value,
     mediaUrl,
@@ -874,16 +865,13 @@ async function submitPost() {
       caption: '',
       timeout: 3000,
     })
-    // --- Reset your form state ---
     postContent.value = ''
     tags.value = []
     mentions.value = []
     links.value = []
     attachedFile.value = null
     selectedCategory.value = ''
-    // ... etc
     router.push({ path: '/profile' })
-    // window.location.reload(); // Consider if this is truly necessary, as it's a full page refresh.
   } catch (err) {
     notif({
       type: 'negative',
@@ -893,9 +881,9 @@ async function submitPost() {
       caption: err.response?.data?.message || err.message,
       timeout: 4000,
     })
+  } finally {
+    disableInput.value = false
   }
-
-  disableInput.value = false
 }
 
 import { getPostSrc } from 'src/composables/formater'

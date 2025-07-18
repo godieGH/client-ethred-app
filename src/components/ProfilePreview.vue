@@ -401,6 +401,7 @@ onMounted(async () => {
   $q.dark.set(settingsStore.dark)
   if (id.value) {
     // Only fetch if id is available
+
     try {
       const { data } = await api.get(`/users/thisuser/${id.value}`)
       user.value = {

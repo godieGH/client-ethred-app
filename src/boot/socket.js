@@ -1,33 +1,42 @@
-// ─── src/boot/socket.js ───────────────────────────────────────────────────────
+// src/boot/socketio.js
+
 import { boot } from 'quasar/wrappers'
-import { io as createSocket } from 'socket.io-client'
+import { io } from 'socket.io-client'
 
-// Point this to your backend’s Socket.IO URL (fallback to http://localhost:3000)
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3000'
-
-// We declare socket here so we can export it later
-let socket
+// Define the socket instance outside the boot function so it can be exported
+let socket = null
 
 export default boot(({ app }) => {
-  // 1) Create the shared Socket.IO client instance:
-  socket = createSocket(SOCKET_URL, {
-    // (optional) you can customize transports, auth payload, etc.
+  // Retrieve the Socket.IO URL from your environment variables
+  const SOCKET_URL = "/"
+  
+  //console.log(SOCKET_URL)
+  // Initialize the socket connection
+  socket = io(SOCKET_URL, {
+    // You can add additional options here, e.g.,
     // transports: ['websocket'],
     // autoConnect: false,
   })
 
-  // 2) Make it available as this.$socket in Options API components:
+  // Set up a 'connect' event listener
+  socket.on('connect', () => {
+    console.log('Socket.IO connected with ID:', socket.id)
+  })
+
+  // Optional: Add other common event listeners
+  socket.on('disconnect', (reason) => {
+    console.log('Socket.IO disconnected:', reason)
+  })
+
+  socket.on('connect_error', (error) => {
+    console.error('Socket.IO connection error:', error.message)
+  })
+
+  // Make the socket instance globally available in your Vue app
+  // This allows you to access it as this.$socket in your components
   app.config.globalProperties.$socket = socket
-
-  // 3) Also "provide" it so you can inject('socket') in Composition API:
-  app.provide('socket', socket)
-
-  // (Optional) Any global listeners can go here, e.g.:
-  // socket.on('connect', () => {
-  //   console.log('Socket connected as:', socket.id);
-  // });
 })
 
-// 4) Export the same socket instance so you can do:
-//    import { socket } from 'boot/socket'
+// Export the socket instance so it can be imported and used directly
+// in other parts of your application (e.g., store modules, other boot files)
 export { socket }

@@ -37,7 +37,7 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    setUser(userData, jwtToken) {
+    async setUser(userData, jwtToken) {
       this.user = userData
       this.token = jwtToken
       api.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
@@ -46,7 +46,7 @@ export const useUserStore = defineStore('user', {
     async clearUser() {
       try {
         const res = await api.post('/users/logout', this.user)
-        console.log(res.data.message, "done")
+        console.log(res.data.message, 'done')
         this.user = null
         this.token = null
         LocalStorage.clear()

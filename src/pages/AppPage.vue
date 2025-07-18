@@ -350,7 +350,7 @@
         position="bottom"
         transition-show="slide-up"
       >
-        <q-card style="max-width: 800px;" :style="`height: ${$q.screen.height}px;`">
+        <q-card style="max-width: 800px" :style="`height: ${$q.screen.height}px;`">
           <div class="q-mt-md" style="position: sticky; top: 0; z-index: 1; padding: 8px">
             <q-btn flat round icon="close" @click="showProfilePreviewDrawer = false" />
             <span style="margin-left: 8px">Profile</span>
@@ -388,6 +388,7 @@ import ProfilePreview from 'components/ProfilePreview.vue' // Renamed from Previ
 
 const feedsStore = useFeedsStore()
 const userStore = useUserStore()
+
 const $q = useQuasar()
 const isMobile = computed(() => $q.screen.xs || $q.screen.sm)
 const isVerySmall = computed(() => $q.screen.width < 360)

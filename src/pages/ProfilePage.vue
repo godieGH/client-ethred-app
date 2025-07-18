@@ -127,7 +127,7 @@
         <q-tab-panels v-model="tab" animated class="panel-content">
           <!-- POSTS -->
           <q-tab-panel name="posts" class="panel-content">
-            <PostsTab ref="postsTabRef" :user-id="userStore.user?userStore.user.id:null" />
+            <PostsTab ref="postsTabRef" :user-id="userStore.user ? userStore.user.id : null" />
           </q-tab-panel>
 
           <!-- FOLLOWING -->

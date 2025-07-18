@@ -214,7 +214,7 @@
         />
 
         <q-dialog maximized v-model="showMessenger">
-          <q-card class="q-pa-sm" style="overflow-y: hidden; max-width: 1200px;">
+          <q-card class="q-pa-sm" style="overflow-y: hidden; max-width: 1200px">
             <div>
               <div style="display: flex; align-items: center">
                 <i v-close-popup class="q-pr-sm fas fa-chevron-left"></i>
@@ -271,13 +271,13 @@
     </q-page-container>
 
     <q-footer style="z-index: 9999999" v-if="footerStatus">
-      <div v-if="!isOnline" class="q-pa-xs q-py-sm bg-dark-page">
+      <div v-if="!isOnline" class="q-pa-xs q-py-sm bg-dark">
         <i style="font-size: 18px" class="material-icons">wifi_off</i> You're offline. Please check
         your Internet connection.
       </div>
       <div
         v-else
-        class="q-pa-xs bg-dark-page"
+        class="q-pa-xs bg-dark"
         style="display: flex; justify-content: space-between; align-items: center"
       >
         <div><i class="material-icons q-px-sm" style="font-size: 20px">wifi</i> Back Online</div>
@@ -309,17 +309,25 @@ import SettingsPanel from 'components/SettingsPanel.vue'
 import CreatePanel from 'components/CreatePanel.vue'
 import SearchPanel from 'components/SearchPanel.vue'
 import MessengerPanel from 'components/MessengerPanel.vue'
+import { api } from 'boot/axios'
+import { socket } from 'boot/socket'
 import { ref, watch, onMounted, computed, onBeforeUnmount, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useQuasar } from 'quasar'
 import { useUserStore } from 'stores/user'
 import { useSettingsStore } from 'stores/SettingsStore'
+import { useMessageStore } from 'stores/messageStore'
+import { useMsgStore } from 'stores/messages'
 import { getAvatarSrc } from '../composables/formater'
+import { debounce } from 'quasar'
 
 const router = useRouter()
 const $q = useQuasar()
+const imb = useMsgStore()
 const userStore = useUserStore()
 const settingsStore = useSettingsStore()
+const messageStore = useMessageStore()
+
 const profileExpand = ref(false)
 const route = useRoute()
 watch(
@@ -332,38 +340,149 @@ watch(
 )
 
 const showMessenger = ref(false)
-
-// Control for side drawer open/close on small screens
 const leftDrawerOpen = ref(false)
-// Control for collapse/expand (mini mode) on all screens
 const isCollapsed = ref(true)
 const showDrawer = ref(false)
-
-import { api } from "boot/axios"
 const isChangingTheme = ref(false)
 const idx = ref(null)
+
+const userAvatarSrc = computed(() => getAvatarSrc(userStore.user.avatar))
+
+function openCreatePanel() {
+  showDrawer.value = true
+}
+
+// === Status Management Refs ===
+const footerStatus = ref(false)
+const isOnline = ref(true)
+const networkIsOnline = ref(navigator.onLine)
+
+// Debounced function to hide the footer after a delay
+const hideFooter = debounce(() => {
+  footerStatus.value = false
+}, 3500)
+
+// Function to check the server's health
+const checkServerStatus = async () => {
+  if (!networkIsOnline.value) {
+    // If there's no network, no need to even try
+    return false
+  }
+  try {
+    const response = await api.get('/api/')
+    getConversations()
+    // Check if the response from the server is what we expect
+    return response.status === 200 && response.data.status === 'ok'
+  } catch (err) {
+    console.error('Server check failed:', err.message)
+    return false
+  }
+}
+
+// Main function to update the online/offline status
+const updateStatus = async () => {
+  // Update network status first
+  networkIsOnline.value = navigator.onLine
+
+  // Perform the server check
+  const serverIsAccessible = await checkServerStatus()
+
+  // The overall online status is a combination of network and server health
+  isOnline.value = networkIsOnline.value && serverIsAccessible
+}
+
 onMounted(async () => {
+  // Check user authentication first
   const needLogin = await userStore.initialize()
   if (needLogin) {
     router.push('/auth/login')
     return
   }
+
+  // Initialize the token refresh interval
+  idx.value = setInterval(
+    async function () {
+      try {
+        const { data } = await api.post('/users/token/refresh')
+        userStore.setUser(data.user, data.accessToken)
+      } catch (err) {
+        console.log(err.message)
+      }
+    },
+    15 * 60 * 1000,
+  )
   
-  
-  idx.value = setInterval(async function() {
-       try {
-          const { data } = await api.post('/users/token/refresh')
-          userStore.setUser(data.user, data.accessToken)
-       } catch(err) {
-          console.log(err.message)
-       }
-    }, 15*60*1000);
-    
-    
+  //getConversations()
+  imb.initializeStore();
+  messageStore.initializeStore()
+  socket.on("refresh", () => {
+     getConversations();
+  })
+
   await settingsStore.fetcUserPreferedSettings()
   $q.dark.set(settingsStore.dark)
+
+  // === Integration starts here ===
+  // 1. Initial status check on mount
+  await updateStatus()
+
+  // 2. Set up event listeners for network changes
+  window.addEventListener('online', updateStatus)
+  window.addEventListener('offline', updateStatus)
+
+  // 3. Set up socket listeners. The socket's status also informs our overall status.
+  socket.on('disconnect', (reason) => {
+    console.log('Disconnected from server:', reason)
+    updateStatus()
+  })
+
+  socket.on('connect_error', (error) => {
+    console.error('Socket connection error:', error)
+    updateStatus()
+  })
+
+  socket.on('connect', () => {
+    console.log('Successifully connected to server')
+    updateStatus()
+  })
 })
 
+async function getConversations() {
+   try {
+      const { data } = await api.get('/api/rooms')
+      socket.emit('create_room', data)
+   } catch(err) {
+      console.error(err.message)
+   }
+}
+
+onBeforeUnmount(() => {
+  // Clean up event listeners
+  window.removeEventListener('online', updateStatus)
+  window.removeEventListener('offline', updateStatus)
+
+  if (socket) {
+    socket.disconnect()
+  }
+})
+
+onUnmounted(() => {
+  // Clear the refresh interval
+  clearInterval(idx.value)
+})
+
+// Watcher for the main online status
+watch(isOnline, (newValue) => {
+  if (newValue) {
+    footerStatus.value = true // Show the "online" message briefly
+    hideFooter() // Hide it after the delay
+  } else {
+    footerStatus.value = true // Immediately show the "offline" message
+    hideFooter.cancel() // Cancel any pending hide operation
+  }
+})
+
+// === Other component methods ===
 async function toggleDarkMode() {
   isChangingTheme.value = true
   try {
@@ -382,87 +501,6 @@ async function toggleDarkMode() {
 function toggleCollapse() {
   isCollapsed.value = !isCollapsed.value
 }
-
-const userAvatarSrc = computed(() => getAvatarSrc(userStore.user.avatar))
-
-function openCreatePanel() {
-  //alert("hello world")
-  showDrawer.value = true
-}
-
-import { debounce } from 'quasar'
-import { io } from 'socket.io-client'
-
-const footerStatus = ref(false) // Initialize to false, so it's not displayed initially
-const isOnline = ref(true) // This will now reflect both network and server connectivity
-
-let socket // Declare socket outside to make it accessible to other functions
-
-const hideFooter = debounce(() => {
-  footerStatus.value = false
-}, 3500)
-
-const handleOnlineStatusChange = () => {
-  // Check network connectivity first
-  const networkIsOnline = navigator.onLine
-
-  // Check socket.io connection status
-  const serverIsAccessible = socket && socket.connected
-
-  // Set isOnline based on both conditions
-  isOnline.value = networkIsOnline && serverIsAccessible
-
-  // The footer should only show if we are NOT online (i.e., disconnected)
-  if (!isOnline.value) {
-    footerStatus.value = true
-  }
-  // No need for an else here, as hideFooter in the watch will handle hiding when online
-}
-
-onMounted(() => {
-  socket = io(import.meta.env.VITE_API_BASE_URL)
-
-  // Listen for socket.io connection events
-  socket.on('connect', () => {
-    console.log('Connected to server with socket ID:', socket.id)
-    handleOnlineStatusChange() // Update status when connected
-  })
-
-  socket.on('disconnect', (reason) => {
-    console.log('Disconnected from server:', reason)
-    handleOnlineStatusChange() // Update status when disconnected
-  })
-
-  socket.on('connect_error', (error) => {
-    console.error('Socket connection error:', error)
-    handleOnlineStatusChange() // Update status on connection error
-  })
-
-  window.addEventListener('online', handleOnlineStatusChange)
-  window.addEventListener('offline', handleOnlineStatusChange)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('online', handleOnlineStatusChange)
-  window.removeEventListener('offline', handleOnlineStatusChange)
-  if (socket) {
-    socket.disconnect() // Disconnect socket when component unmounts
-  }
-})
-
-watch(isOnline, (newValue) => {
-  if (newValue === true) {
-    // If we just came online (or were already online), hide the footer after a delay
-    hideFooter()
-  } else {
-    // If we just went offline, immediately show the footer
-    footerStatus.value = true
-  }
-})
-
-onUnmounted(() => {
-   clearInterval(idx.value)
-})
 </script>
 
 <style scoped>

@@ -127,11 +127,9 @@ const submitForm = async () => {
 
     try {
       const res = await api.post(`/users/login`, credentials.value)
-      if (res.status === 200) {
-        userStore.setUser(res.data.user, res.data.accessToken)
-        if (userStore.isLoggedIn) {
-          router.push('/')
-        }
+      userStore.setUser(res.data.user, res.data.accessToken)
+      if (userStore.isLoggedIn) {
+        window.location.href = '/'
       }
     } catch (err) {
       if (err.status === 401) {

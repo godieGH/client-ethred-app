@@ -118,12 +118,14 @@ async function handleSubmit() {
       token,
       newPassword: password.value,
     }
-
     const { data } = await api.post('/users/reset/password', payload)
-    $q.notify({
-      type: 'positive',
-      message: data.msg || 'Password changed successfully',
-    })
+
+    if (data) {
+      $q.notify({
+        type: 'positive',
+        message: data.msg || 'Password changed successfully',
+      })
+    }
 
     // Clear form & optionally redirect to login
     password.value = ''

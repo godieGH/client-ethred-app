@@ -6,12 +6,12 @@ import axios from 'axios'
 const getBaseUrl = () => {
   if (process.env.NODE_ENV === 'development') {
     // For development, use the VITE_API_BASE_URL from your .env file
-    return process.env.VITE_API_BASE_URL;
+    return process.env.VITE_API_BASE_URL
   } else {
     // For production, use '/' to indicate a relative path
-    return '/';
+    return '/'
   }
-};
+}
 
 // 1. Create an Axios instance with credentials enabled
 const api = axios.create({

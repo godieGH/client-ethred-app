@@ -71,6 +71,7 @@ const onSubmit = async () => {
   }
 
   loading.value = true
+
   try {
     const { data } = await api.post('/users/forgot/password', {
       email: email.value,

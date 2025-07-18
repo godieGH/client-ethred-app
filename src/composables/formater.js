@@ -41,3 +41,32 @@ export function formatCounts(n) {
   }
   return String(n)
 }
+
+export function formatFileSize(sizeInByte) {
+  /**
+   * Formats a size in bytes into a human-readable string (e.g., KB, MB, GB).
+   * @param {number} sizeInByte The size in bytes.
+   * @returns {string} A formatted string representing the size.
+   */
+  if (sizeInByte === null || sizeInByte === undefined) {
+    return 'N/A'
+  }
+
+  const units = ['bytes', 'kb', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+
+  if (sizeInByte === 0) {
+    return '0 bytes'
+  }
+
+  const i = Math.floor(Math.log(sizeInByte) / Math.log(1024))
+  const formattedSize = sizeInByte / Math.pow(1024, i)
+
+  if (i === 0) {
+    return `${formattedSize} ${units[i]}`
+  }
+
+  const formattedWithPrecision = formattedSize.toFixed(2)
+  const formattedWithoutTrailingZeros = parseFloat(formattedWithPrecision).toString()
+
+  return `${formattedWithoutTrailingZeros} ${units[i]}`
+}

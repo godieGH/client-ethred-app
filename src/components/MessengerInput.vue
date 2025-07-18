@@ -40,7 +40,7 @@
           ></textarea>
 
           <div v-if="hasAttachment" class="attachment-preview-wrapper">
-            <div class="attachment-preview">
+            <div style="width: 100%" class="attachment-preview">
               <img
                 v-if="attachment.type === 'image'"
                 :src="attachment.url"
@@ -53,10 +53,10 @@
                 alt="Video Attachment"
                 class="attachment-icon"
               />
-              <img
+              <q-icon
                 v-else-if="attachment.type === 'file'"
-                src="~assets/file-logo.png"
-                alt="File Attachment"
+                name="insert_drive_file"
+                size="30px"
                 class="attachment-icon"
               />
               <span class="attachment-name">{{ attachment.name }}</span>
@@ -130,47 +130,44 @@
 </template>
 
 <script setup>
-import { ref, watch, reactive, onMounted, onUnmounted, nextTick, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import { useQuasar } from 'quasar'
+import { useUserStore } from 'stores/user'
+import { useMessageStore } from 'stores/messageStore'
 
+const userStore = useUserStore()
+const messageStore = useMessageStore()
 const props = defineProps({
   currentConversation: Object,
 })
 const readyToSendMsg = ref(false)
-watch(
-  () => props.currentConversation,
-  (a) => {
-    readyToSendMsg.value = false
 
-    if (a.id) {
-      readyToSendMsg.value = true
-    }
-  },
-)
+onMounted((a = props.currentConversation) => {
+  readyToSendMsg.value = false
+  if (a.id) {
+    readyToSendMsg.value = true
+  }
+})
 
-// Reactive state
 const message = ref('')
 const isFabMenuOpen = ref(false)
 const fabMenuStyle = reactive({})
-const attachment = reactive({
-  type: null, // 'image', 'video', 'file'
-  url: null, // URL for image thumbnail, or generic icon URL
-  name: null, // File name
-  file: null, // The actual File object
+const attachment = ref({
+  type: null,
+  url: null,
+  name: null,
+  file: null,
 })
 const $q = useQuasar()
 
-// Computed property to check if an attachment is present
-const hasAttachment = computed(() => attachment.type !== null)
+const hasAttachment = computed(() => attachment.value.type !== null)
 const hasTyped = ref(false)
 
-// Template Refs
 const textareaRef = ref(null)
 const attachmentButtonRef = ref(null)
 const fabMenuRef = ref(null)
 const chatInputAreaRef = ref(null)
 
-// Methods
 const autoGrowTextarea = () => {
   const textarea = textareaRef.value
   hasTyped.value = textarea.value.length > 0
@@ -224,19 +221,52 @@ const openDevicePicker = (acceptType, attachmentType) => {
     if (files.length > 0) {
       const selectedFile = files[0]
 
-      attachment.type = attachmentType
-      attachment.name = selectedFile.name
-      attachment.file = selectedFile // Store the actual file object
+      let isValid = true
+      let errorMessage = ''
+
+      // File size validation
+      const fileSizeMB = selectedFile.size / (1024 * 1024) // Convert bytes to MB
+
+      switch (attachmentType) {
+        case 'image':
+          if (fileSizeMB > 5) {
+            isValid = false
+            errorMessage = 'Image must be less than 5MBs.'
+          }
+          break
+        case 'video':
+          if (fileSizeMB > 20) {
+            isValid = false
+            errorMessage = 'Video must be less than 20MBs.'
+          }
+          break
+        case 'file': // For general files
+          if (fileSizeMB > 50) {
+            isValid = false
+            errorMessage = 'File must be less than 50MBs.'
+          }
+          break
+      }
+
+      if (!isValid) {
+        $q.notify({
+          message: errorMessage,
+        })
+        document.body.removeChild(input)
+        isFabMenuOpen.value = false
+        return
+      }
+
+      attachment.value.type = attachmentType
+      attachment.value.name = selectedFile.name
+      attachment.value.file = selectedFile
 
       if (attachmentType === 'image') {
-        // Create a URL for the image thumbnail
-        attachment.url = URL.createObjectURL(selectedFile)
+        attachment.value.url = URL.createObjectURL(selectedFile)
       } else if (attachmentType === 'video') {
-        // Use a generic video icon URL (provided by you)
-        attachment.url = '~assets/video-logo.png' // Replace with your video icon URL
+        attachment.value.url = '~assets/video-logo.png' // Placeholder for video
       } else if (attachmentType === 'file') {
-        // Use a generic file icon URL (provided by you)
-        attachment.url = '~assets/file-logo.png' // Replace with your file icon URL
+        attachment.value.url = '~assets/file-logo.png' // Placeholder for general file
       }
     }
     document.body.removeChild(input)
@@ -245,12 +275,13 @@ const openDevicePicker = (acceptType, attachmentType) => {
 
   document.body.appendChild(input)
   input.click()
+
+  //console.log(attachment.value)
 }
 
 const handleFabAction = (action) => {
   switch (action) {
     case 'location':
-      // Implement location selection logic here
       isFabMenuOpen.value = false
       break
     case 'file':
@@ -268,18 +299,15 @@ const handleFabAction = (action) => {
 }
 
 const discardAttachment = () => {
-  // Revoke the object URL if it was created for an image to free up memory
-  if (attachment.type === 'image' && attachment.url) {
-    URL.revokeObjectURL(attachment.url)
+  if (attachment.value.type === 'image' && attachment.value.url) {
+    URL.revokeObjectURL(attachment.value.url)
   }
-  // Reset attachment state
-  attachment.type = null
-  attachment.url = null
-  attachment.name = null
-  attachment.file = null
+  attachment.value.type = null
+  attachment.value.url = null
+  attachment.value.name = null
+  attachment.value.file = null
 }
 
-// Lifecycle Hooks
 onMounted(() => {
   positionFabMenu()
   window.addEventListener('resize', positionFabMenu)
@@ -289,9 +317,8 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', positionFabMenu)
   document.removeEventListener('click', closeFabMenuOnClickOutside)
-  // Clean up any lingering object URLs
-  if (attachment.type === 'image' && attachment.url) {
-    URL.revokeObjectURL(attachment.url)
+  if (attachment.value.type === 'image' && attachment.value.url) {
+    URL.revokeObjectURL(attachment.value.url)
   }
 })
 
@@ -321,6 +348,23 @@ const formattedRecordingTime = computed(() => {
   return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
 })
 
+const getSupportedAudioMimeType = () => {
+  const types = [
+    'audio/wav',
+    'audio/webm; codecs=opus',
+    'audio/webm',
+    'audio/ogg; codecs=opus',
+    'audio/ogg',
+  ]
+
+  for (const type of types) {
+    if (MediaRecorder.isTypeSupported(type)) {
+      return type
+    }
+  }
+  return 'audio/webm'
+}
+
 const startRecording = (e) => {
   if (!readyToSendMsg.value) return
   if (e.touches && e.touches.length > 0) {
@@ -341,24 +385,30 @@ const startRecording = (e) => {
     }
   }, 150)
 }
+
 const startRecordingAudio = () => {
   navigator.mediaDevices
     .getUserMedia({ audio: true })
     .then(function (stream) {
       mediaStream = stream
-      let options = { mimeType: 'audio/webm' }
+      const mimeType = getSupportedAudioMimeType()
+      let options = { mimeType: mimeType }
+
+      if (mimeType.includes('opus')) {
+        options.audioBitsPerSecond = 128000
+      }
+
       mediaRecorder = new MediaRecorder(mediaStream, options)
 
       mediaRecorder.ondataavailable = function (event) {
         audioChunks.value.push(event.data)
       }
-      mediaRecorder.start(1000) // Start recording and gather data every second
+      mediaRecorder.start(1000)
     })
     .catch(function (err) {
       cancelRecording()
       console.log(err.message)
       $q.notify({
-        type: 'negative',
         message: `Voice Recording: ${err.message}`,
       })
     })
@@ -401,7 +451,6 @@ const cancelRecording = () => {
 
   mediaRecorder = null
   fullAudioBlob.value = null
-  //console.log('Recording cancelled (reached 200px)')
 }
 
 const stopRecording = () => {
@@ -432,16 +481,25 @@ const stopRecording = () => {
       }
 
       mediaRecorder.onstop = function () {
-        fullAudioBlob.value = new Blob(audioChunks.value, { type: 'audio/webm' })
+        const mimeType = getSupportedAudioMimeType()
+        fullAudioBlob.value = new Blob(audioChunks.value, { type: mimeType })
 
         audioChunks.value = []
+
+        sendMsg()
         if (mediaStream) {
           mediaStream.getTracks().forEach((track) => track.stop())
           mediaStream = null
         }
-      }
 
-      console.log('Recording finished/sent!', recordingDuration.value, 'seconds')
+        const audio = new Audio()
+        audio.src = URL.createObjectURL(fullAudioBlob.value)
+        audio.addEventListener('loadedmetadata', () => {
+          const duration = audio.duration
+          console.log('Audio duration:', duration)
+          URL.revokeObjectURL(audio.src)
+        })
+      }
     } else {
       console.log('Recording cancelled by drag!')
     }
@@ -449,20 +507,48 @@ const stopRecording = () => {
 
   isRecording.value = false
   recordingDuration.value = 0
-  currentTranslateX.value = 0 // Reset translation
+  currentTranslateX.value = 0
 }
 
 onUnmounted(() => {
-  if (!recTimeIntervalId.value) {
+  if (recTimeIntervalId.value) {
     clearInterval(recTimeIntervalId.value)
+  }
+  if (waitABitId.value) {
     clearInterval(waitABitId.value)
+  }
+  if (fullAudioBlob.value && fullAudioBlob.value.url) {
+    URL.revokeObjectURL(fullAudioBlob.value.url)
   }
 })
 
-import { io } from 'socket.io-client'
 async function sendMsg() {
-  const conversation_id = props.currentConversation.id
-  console.log(conversation_id, io)
+  if (!hasTyped.value && !hasAttachment.value && !fullAudioBlob.value) return
+
+  const content = {
+    text: message.value != '' ? message.value : null,
+    attachment: hasAttachment.value ? { ...attachment.value } : null,
+    fullAudioBlob: fullAudioBlob.value,
+  }
+
+  const messageObj = {
+    conversation: props.currentConversation,
+    sender: userStore.user,
+    sender_type: 'user',
+    content,
+    sent_at: Date.now(),
+    isMine: true,
+    read_by: [],
+    queued: true,
+  }
+
+  if (messageStore.queueMsg(messageObj)) {
+    message.value = ''
+    hasTyped.value = false
+    discardAttachment()
+    fullAudioBlob.value = null
+  }
+  await messageStore.processAllQueuedMessages()
 }
 </script>
 
@@ -723,6 +809,7 @@ async function sendMsg() {
   text-overflow: ellipsis;
   font-size: 14px;
   color: #333;
+  flex-grow: 1;
 }
 
 .close-attachment {
